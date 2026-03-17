@@ -1,20 +1,52 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, Text } from 'react-native';
+import AppNavigator from './src/navigation/AppNavigator';
+import { ThemeProvider, useTheme } from './src/constants/ThemeContext';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useFonts as useSpaceFonts, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { DarkColors } from './src/constants/Theme';
 
-export default function App() {
+function ThemedShell() {
+  const { mode } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <AppNavigator />
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  const [interLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  const [spaceLoaded] = useSpaceFonts({
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
+
+  // Avoid a blank screen during font load (especially noticeable on Android).
+  if (!interLoaded || !spaceLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: DarkColors.background }}>
+        <Text style={{ fontSize: 28, fontWeight: '700', color: DarkColors.text }}>AroundYou</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <ThemedShell />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
+
