@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated, Easing, TouchableOpacity, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Animated, Easing, TouchableOpacity, Platform, Image, StatusBar } from 'react-native';
 import { useTheme } from '../../constants/ThemeContext';
 import MapView, { Callout, Circle, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Navigation, Star, MapPin } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getNearbyPlaces, pingPresence, PlacePublic } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { Shadows } from '../../constants/Theme';
 
 const { width } = Dimensions.get('window');
 const RADAR_RADIUS_METERS = 30_000;
@@ -13,17 +16,17 @@ const PLACES_LIMIT = 5;
 const CAMERA_ANIMATION_MS = 800;
 
 const DARK_MAP_STYLE = [
-    { elementType: 'geometry', stylers: [{ color: '#0b0b0f' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#0b0b0f' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#9CA3AF' }] },
-    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#27272A' }] },
-    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6B7280' }] },
-    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f1f1f' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0b0b0f' }] },
-    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9CA3AF' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1a22' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
+    { elementType: 'geometry', stylers: [{ color: '#0B0B0F' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#0B0B0F' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1F1F2B' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#16161E' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1F1F2B' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0B0B0F' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#08080C' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
 ];
 
 type NearbyPlace = {
@@ -72,8 +75,7 @@ function getInitials(name: string) {
 
 function getPlaceImage(placeId: string, title: string) {
     const seed = encodeURIComponent(`${placeId}-${title}`);
-    // Keep this intentionally small to reduce network + decoding cost on Android.
-    return `https://picsum.photos/seed/${seed}/420/300`;
+    return `https://picsum.photos/seed/${seed}/600/400`;
 }
 
 function withAlpha(hex: string, alpha: number) {
@@ -87,80 +89,47 @@ function withAlpha(hex: string, alpha: number) {
 
 async function fetchNearbyPlaces(
     center: { latitude: number; longitude: number },
-    radiusMeters: number,
-    signal?: AbortSignal
+    radiusMeters: number
 ): Promise<NearbyPlace[]> {
-    const { latitude, longitude } = center;
+    try {
+        const rows = await getNearbyPlaces({
+            lat: center.latitude,
+            lon: center.longitude,
+            radius_meters: radiusMeters,
+            limit: 25,
+        });
 
-    const query = `
-[out:json][timeout:10];
-(
-  node(around:${radiusMeters},${latitude},${longitude})["name"]["shop"];
-  node(around:${radiusMeters},${latitude},${longitude})["name"]["amenity"~"cafe|restaurant|fast_food|marketplace|supermarket"];
-);
-out body;
-`;
-
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal,
-    });
-
-    if (!response.ok) {
-        throw new Error(`Overpass failed: ${response.status}`);
+        return rows
+            .filter((p: PlacePublic) => typeof p?.lat === 'number' && typeof p?.lon === 'number')
+            .map((p: PlacePublic) => {
+                const coordinate = { latitude: p.lat, longitude: p.lon };
+                const distanceMeters = haversineDistanceMeters(center, coordinate);
+                return {
+                    id: p.id,
+                    title: p.name,
+                    description: p.category,
+                    distanceMeters,
+                    coordinate,
+                    category: p.category,
+                    image: getPlaceImage(p.id, p.name),
+                };
+            })
+            .sort((a: NearbyPlace, b: NearbyPlace) => a.distanceMeters - b.distanceMeters)
+            .slice(0, PLACES_LIMIT);
+    } catch {
+        return [];
     }
-
-    const json = await response.json();
-    const elements = Array.isArray(json?.elements) ? json.elements : [];
-
-    const mapped: NearbyPlace[] = elements
-        .filter((el: any) => typeof el?.lat === 'number' && typeof el?.lon === 'number')
-        .map((el: any) => {
-            const name = el?.tags?.name;
-            const category = el?.tags?.shop
-                ? `Shop • ${String(el.tags.shop)}`
-                : el?.tags?.amenity
-                    ? `Place • ${String(el.tags.amenity)}`
-                    : 'Place';
-            const coordinate = { latitude: el.lat, longitude: el.lon };
-            const distanceMeters = haversineDistanceMeters(center, coordinate);
-            return {
-                id: `osm-node-${String(el.id)}`,
-                title: typeof name === 'string' && name.trim() ? name.trim() : 'Nearby place',
-                description: category,
-                distanceMeters,
-                coordinate,
-                category,
-                image: getPlaceImage(`osm-node-${String(el.id)}`, typeof name === 'string' ? name.trim() : 'place'),
-            };
-        })
-        .filter((p: NearbyPlace) => p.title !== 'Nearby place')
-        .sort((a: NearbyPlace, b: NearbyPlace) => a.distanceMeters - b.distanceMeters);
-
-    const seen = new Set<string>();
-    const deduped: NearbyPlace[] = [];
-    for (const p of mapped) {
-        const key = p.title.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        deduped.push(p);
-        if (deduped.length >= PLACES_LIMIT) break;
-    }
-
-    return deduped;
 }
 
 export default function MapScreen({ navigation }: any) {
     const { colors, typography, layout, globalStyles, mode } = useTheme();
+    const { token } = useAuth();
+    const useNativeDriver = Platform.OS !== 'web';
     const insets = useSafeAreaInsets();
     const isAndroid = Platform.OS === 'android';
     const showRadarOverlay = !isAndroid;
     const spinValue = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(300)).current;
+    const slideAnim = useRef(new Animated.Value(400)).current;
     const radarOpacity = useRef(new Animated.Value(1)).current;
     const mapRef = useRef<MapView>(null);
     const lastCameraCenter = useRef<{ latitude: number; longitude: number } | null>(null);
@@ -178,15 +147,15 @@ export default function MapScreen({ navigation }: any) {
         const centerCamera = (center: { latitude: number; longitude: number }, force = false) => {
             const previous = lastCameraCenter.current;
             const moved = previous ? haversineDistanceMeters(previous, center) : Infinity;
-            if (!force && moved < 35) return;
+            if (!force && moved < 50) return;
 
             lastCameraCenter.current = center;
             mapRef.current?.animateToRegion(
                 {
-                    latitude: center.latitude,
+                    latitude: center.latitude - 0.05, // Slightly offset so center marker is visible
                     longitude: center.longitude,
-                    latitudeDelta: 0.6,
-                    longitudeDelta: 0.6,
+                    latitudeDelta: 0.5,
+                    longitudeDelta: 0.5,
                 },
                 CAMERA_ANIMATION_MS
             );
@@ -194,39 +163,11 @@ export default function MapScreen({ navigation }: any) {
 
         const loadPlaces = async (center: { latitude: number; longitude: number }) => {
             setFindingPlaces(true);
-
-            // Show something immediately so the map doesn't feel "stuck" while fetching.
-            const presets = [
-                { title: 'Starbucks', category: 'Shop' },
-                { title: "McDonald's", category: 'Fast food' },
-                { title: 'IKEA', category: 'Shop' },
-                { title: 'Nike Store', category: 'Shop' },
-                { title: 'H&M', category: 'Shop' },
-            ];
-            const bearings = [20, 95, 160, 240, 310];
-            const distances = [6500, 11200, 18700, 9800, 14400];
-            const presetPlaces: NearbyPlace[] = presets.map((p, i) => ({
-                id: `preset-${i}`,
-                title: p.title,
-                category: p.category,
-                description: p.category,
-                distanceMeters: distances[i],
-                coordinate: {
-                    latitude: center.latitude + (Math.cos(toRadians(bearings[i])) * distances[i]) / 111_000,
-                    longitude: center.longitude + (Math.sin(toRadians(bearings[i])) * distances[i]) / (111_000 * Math.cos(toRadians(center.latitude))),
-                },
-                image: getPlaceImage(`preset-${i}`, p.title),
-            }));
-            setPlaces(presetPlaces);
-
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 4500);
-                const found = await fetchNearbyPlaces(center, RADAR_RADIUS_METERS, controller.signal);
-                clearTimeout(timeout);
+                const found = await fetchNearbyPlaces(center, RADAR_RADIUS_METERS);
                 if (found.length) setPlaces(found);
             } catch {
-                // Keep preset places if fetch fails/timeout.
+                // ignore
             } finally {
                 setFindingPlaces(false);
             }
@@ -235,12 +176,6 @@ export default function MapScreen({ navigation }: any) {
         (async () => {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') return;
-
-            const lastKnown = await Location.getLastKnownPositionAsync({});
-            if (lastKnown) {
-                setLocation(lastKnown);
-                centerCamera({ latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude }, true);
-            }
 
             const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             setLocation(current);
@@ -251,8 +186,8 @@ export default function MapScreen({ navigation }: any) {
             subscription = await Location.watchPositionAsync(
                 {
                     accuracy: Location.Accuracy.Balanced,
-                    timeInterval: 2500,
-                    distanceInterval: 10,
+                    timeInterval: 5000,
+                    distanceInterval: 100,
                 },
                 (next) => {
                     setLocation(next);
@@ -275,7 +210,7 @@ export default function MapScreen({ navigation }: any) {
                 toValue: 1,
                 duration: 4000,
                 easing: Easing.linear,
-                useNativeDriver: true,
+                useNativeDriver,
             })
         ).start();
     }, [spinValue, showRadarOverlay]);
@@ -285,31 +220,27 @@ export default function MapScreen({ navigation }: any) {
             Animated.spring(slideAnim, {
                 toValue: 0,
                 friction: 8,
-                useNativeDriver: true
+                tension: 40,
+                useNativeDriver
             }).start();
         } else {
             Animated.timing(slideAnim, {
-                toValue: 300,
-                duration: 250,
-                useNativeDriver: true
+                toValue: 400,
+                duration: 300,
+                useNativeDriver
             }).start();
         }
-    }, [selectedPlace, slideAnim]);
+    }, [selectedPlace]);
 
     useEffect(() => {
-        if (!showRadarOverlay) return;
-        if (hasFadedRadar.current) return;
-        if (!location) return;
-        if (findingPlaces) return;
-        if (places.length < PLACES_LIMIT) return;
-
+        if (!showRadarOverlay || hasFadedRadar.current || !location || findingPlaces || places.length < 2) return;
         hasFadedRadar.current = true;
         Animated.timing(radarOpacity, {
             toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
+            duration: 1000,
+            useNativeDriver,
         }).start();
-    }, [showRadarOverlay, location, findingPlaces, places.length, radarOpacity]);
+    }, [showRadarOverlay, location, findingPlaces, places.length]);
 
     const spin = spinValue.interpolate({
         inputRange: [0, 1],
@@ -326,23 +257,17 @@ export default function MapScreen({ navigation }: any) {
 
     const handleMarkerPress = (place: NearbyPlace) => {
         setSelectedPlace(place);
+        if (token) pingPresence(token, place.id).catch(() => { });
+
         mapRef.current?.animateToRegion(
             {
-                latitude: place.coordinate.latitude - 0.01,
+                latitude: place.coordinate.latitude - 0.08,
                 longitude: place.coordinate.longitude,
-                latitudeDelta: 0.25,
-                longitudeDelta: 0.25,
+                latitudeDelta: 0.3,
+                longitudeDelta: 0.3,
             },
-            500
+            600
         );
-
-        markerRefs.current[place.id]?.showCallout?.();
-    };
-
-    const handleMapPress = () => {
-        if (selectedPlace) {
-            setSelectedPlace(null);
-        }
     };
 
     const initialRegion = {
@@ -368,36 +293,30 @@ export default function MapScreen({ navigation }: any) {
                 showsCompass={false}
                 pitchEnabled={true}
                 rotateEnabled={true}
-                zoomEnabled={true}
-                scrollEnabled={true}
                 mapPadding={{ top: (insets.top || 0) + 120, right: 24, bottom: (insets.bottom || 0) + 260, left: 24 }}
-                onPress={handleMapPress}
+                onPress={() => setSelectedPlace(null)}
             >
-                {center ? (
+                {center && (
                     <Circle
                         center={center}
                         radius={RADAR_RADIUS_METERS}
-                        strokeColor={withAlpha(colors.primary, mode === 'dark' ? 0.28 : 0.22)}
-                        fillColor={withAlpha(colors.primary, mode === 'dark' ? 0.06 : 0.04)}
+                        strokeColor={withAlpha(colors.accent, mode === 'dark' ? 0.35 : 0.25)}
+                        fillColor={withAlpha(colors.accent, mode === 'dark' ? 0.08 : 0.05)}
                         strokeWidth={2}
                     />
-                ) : null}
+                )}
 
                 {places.map((p) => (
                     <Marker
                         key={p.id}
                         coordinate={p.coordinate}
-                        ref={(ref) => {
-                            markerRefs.current[p.id] = ref as any;
-                        }}
+                        ref={(ref) => { markerRefs.current[p.id] = ref as any; }}
                         onPress={() => handleMarkerPress(p)}
-                        title={p.title}
-                        description={p.category}
                     >
                         <View style={[styles.customMarker, selectedPlace?.id === p.id && styles.customMarkerActive]}>
                             <Text style={styles.markerInitials}>{getInitials(p.title)}</Text>
                             <View style={styles.markerBadge}>
-                                <Star size={10} color={colors.onPrimary} fill={colors.onPrimary} />
+                                <Star size={9} color={colors.onAccent} fill={colors.onAccent} />
                             </View>
                         </View>
 
@@ -414,70 +333,26 @@ export default function MapScreen({ navigation }: any) {
                 ))}
             </MapView>
 
-            {/* Top Branding (Pass-through) */}
-            <View style={[styles.header, { top: (insets.top || 0) + 12 }]} pointerEvents="none">
+            <View style={[styles.header, { top: (insets.top || 0) + 12, pointerEvents: 'none' }]}>
                 <Text style={styles.brandText}>AroundYou</Text>
             </View>
 
-            {/* Radar UI Overlay (Pass-through) */}
-            {showRadarOverlay ? (
-            <Animated.View style={[styles.radarContainer, { opacity: radarOpacity }]} pointerEvents="none">
-                <View style={[styles.ring, { width: width * 1.2, height: width * 1.2, borderRadius: width * 0.6 }]} />
-                <View style={[styles.ring, { width: width * 0.8, height: width * 0.8, borderRadius: width * 0.4, borderColor: withAlpha(colors.primary, 0.22) }]} />
-                <View style={[styles.ring, { width: width * 0.4, height: width * 0.4, borderRadius: width * 0.2, borderColor: withAlpha(colors.primary, 0.38) }]} />
+            {showRadarOverlay && (
+                <Animated.View style={[styles.radarContainer, { opacity: radarOpacity, pointerEvents: 'none' }]}>
+                    <View style={[styles.ring, { width: width * 1.2, height: width * 1.2, borderRadius: width * 0.6 }]} />
+                    <View style={[styles.ring, { width: width * 0.8, height: width * 0.8, borderRadius: width * 0.4, borderColor: withAlpha(colors.accent, 0.2) }]} />
+                    <View style={[styles.ring, { width: width * 0.4, height: width * 0.4, borderRadius: width * 0.2, borderColor: withAlpha(colors.accent, 0.3) }]} />
 
-                <Animated.View style={[styles.sweepContainer, { transform: [{ rotate: spin }] }]}>
-                    <View style={styles.sweepCone} />
-                    <View style={styles.sweepLine} />
+                    <Animated.View style={[styles.sweepContainer, { transform: [{ rotate: spin }] }]}>
+                        <View style={styles.sweepCone} />
+                        <View style={styles.sweepLine} />
+                    </Animated.View>
                 </Animated.View>
-            </Animated.View>
-            ) : null}
+            )}
 
-            {/* Interactive Bottom Sheet for Place Detail */}
-            <Animated.View
-                style={[
-                    styles.bottomSheet,
-                    { transform: [{ translateY: slideAnim }] }
-                ]}
-            >
+            <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}>
                 {selectedPlace && (
-                    (isAndroid ? (
-                        <View style={[styles.sheetContent, { backgroundColor: colors.glassSurface }]}>
-                            <Image source={{ uri: selectedPlace.image }} style={styles.sheetImage} />
-                            <View style={styles.sheetDetails}>
-                                <Text style={styles.sheetTitle} numberOfLines={1}>{selectedPlace.title}</Text>
-                                <Text style={styles.sheetSubtitle} numberOfLines={2}>{selectedPlace.description || selectedPlace.category}</Text>
-
-                                <View style={[globalStyles.rowBetween, { marginTop: 12 }]}>
-                                    <View style={globalStyles.row}>
-                                        <MapPin color={colors.textMuted} size={14} />
-                                        <Text style={styles.sheetDistance}>{formatKm(selectedPlace.distanceMeters)}</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={styles.sheetButton}
-                                        onPress={() =>
-                                            navigation.navigate('PlaceDetail', {
-                                                item: {
-                                                    title: selectedPlace.title,
-                                                    user: 'AroundYou',
-                                                    description: selectedPlace.description || `A popular spot nearby: ${selectedPlace.category}.`,
-                                                    image: selectedPlace.image,
-                                                    tags: [selectedPlace.category],
-                                                    likes: 0,
-                                                    distance: formatKm(selectedPlace.distanceMeters),
-                                                    verified: false,
-                                                },
-                                            })
-                                        }
-                                    >
-                                        <Text style={styles.sheetButtonText}>View</Text>
-                                        <Navigation size={14} color={colors.onPrimary} fill={colors.onPrimary} style={{ marginLeft: 4 }} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-                    ) : (
-                        <BlurView intensity={60} tint={mode === 'dark' ? 'dark' : 'light'} style={styles.sheetContent}>
+                    <BlurView intensity={Platform.OS === 'ios' ? 70 : 100} tint={mode === 'dark' ? 'dark' : 'light'} style={styles.sheetContent}>
                         <Image source={{ uri: selectedPlace.image }} style={styles.sheetImage} />
                         <View style={styles.sheetDetails}>
                             <Text style={styles.sheetTitle} numberOfLines={1}>{selectedPlace.title}</Text>
@@ -485,270 +360,233 @@ export default function MapScreen({ navigation }: any) {
 
                             <View style={[globalStyles.rowBetween, { marginTop: 12 }]}>
                                 <View style={globalStyles.row}>
-                                    <MapPin color={colors.textMuted} size={14} />
+                                    <MapPin color={colors.accent} size={14} />
                                     <Text style={styles.sheetDistance}>{formatKm(selectedPlace.distanceMeters)}</Text>
                                 </View>
                                 <TouchableOpacity
                                     style={styles.sheetButton}
                                     onPress={() =>
-                                        navigation.navigate('PlaceDetail', {
-                                            item: {
-                                                title: selectedPlace.title,
-                                                user: 'AroundYou',
-                                                description: selectedPlace.description || `A popular spot nearby: ${selectedPlace.category}.`,
-                                                image: selectedPlace.image,
-                                                tags: [selectedPlace.category],
-                                                likes: 0,
-                                                distance: formatKm(selectedPlace.distanceMeters),
-                                                verified: false,
-                                            },
-                                        })
+                                        navigation.navigate('PlaceDetail', { placeId: selectedPlace.id.startsWith('preset-') ? undefined : selectedPlace.id })
                                     }
                                 >
                                     <Text style={styles.sheetButtonText}>View</Text>
-                                    <Navigation size={14} color={colors.onPrimary} fill={colors.onPrimary} style={{ marginLeft: 4 }} />
+                                    <Navigation size={14} color={colors.onAccent} fill={colors.onAccent} style={{ marginLeft: 4 }} />
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        </BlurView>
-                    ))
+                    </BlurView>
                 )}
             </Animated.View>
 
-            {/* Floating Sector Panel */}
-            <View style={[styles.sectorPanel, { bottom: (insets.bottom || 0) + 96 }]} pointerEvents="none">
+            <View style={[styles.sectorPanel, { bottom: (insets.bottom || 0) + 96, pointerEvents: 'none' }]}>
                 <Text style={styles.sectorLabel}>CURRENT SECTOR</Text>
                 <Text style={styles.sectorName}>
                     {location
-                        ? (findingPlaces ? 'FINDING PLACES…' : `${Math.min(places.length, PLACES_LIMIT)} PLACES • 30KM`)
-                        : 'GETTING LOCATION…'}
+                        ? (findingPlaces ? 'SCANNING…' : `${Math.min(places.length, PLACES_LIMIT)} DETECTED • 30KM`)
+                        : 'OFFLINE'}
                 </Text>
             </View>
         </View>
     );
 }
 
-function createStyles({
-    colors,
-    typography,
-    layout,
-}: {
-    colors: any;
-    typography: any;
-    layout: any;
-}) {
+function createStyles({ colors, typography, layout }: any) {
     return StyleSheet.create({
-    header: {
-        position: 'absolute',
-        top: 60,
-        left: layout.padding.xl,
-        zIndex: 10,
-        backgroundColor: colors.glassSurface,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-    },
-    brandText: {
-        fontFamily: 'SpaceGrotesk_700Bold',
-        fontSize: 24,
-        color: colors.text,
-        letterSpacing: 0.2,
-    },
-    radarContainer: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 5,
-    },
-    ring: {
-        position: 'absolute',
-        borderWidth: 1,
-        borderColor: withAlpha(colors.primary, 0.06),
-    },
-    sweepContainer: {
-        position: 'absolute',
-        width: width * 1.2,
-        height: width * 1.2,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    sweepCone: {
-        position: 'absolute',
-        width: width * 0.6,
-        height: width * 0.6,
-        top: 0,
-        left: width * 0.6,
-        backgroundColor: colors.primary,
-        opacity: 0.1,
-        borderTopRightRadius: width * 0.6,
-    },
-    sweepLine: {
-        position: 'absolute',
-        width: 2,
-        height: width * 0.6,
-        backgroundColor: colors.primary,
-        top: 0,
-        left: width * 0.6,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 10,
-        elevation: 10,
-    },
-    sectorPanel: {
-        position: 'absolute',
-        bottom: 120,
-        left: layout.padding.xl,
-        backgroundColor: colors.glassSurface,
-        paddingVertical: 14,
-        paddingHorizontal: 24,
-        borderRadius: layout.radius.round,
-        borderWidth: 1,
-        borderColor: colors.border,
-        zIndex: 10,
-        opacity: 0.9,
-    },
-    sectorLabel: {
-        ...typography.caption,
-        color: colors.textMuted,
-        marginBottom: 4,
-    },
-    sectorName: {
-        fontFamily: 'SpaceGrotesk_700Bold',
-        fontSize: 16,
-        color: colors.primary,
-        letterSpacing: 0.5,
-    },
-
-    // Markers & Sheet
-    customMarker: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: colors.overlay,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
-        shadowRadius: 5,
-        elevation: 5,
-    },
-    markerInitials: {
-        fontFamily: 'SpaceGrotesk_700Bold',
-        fontSize: 14,
-        color: colors.text,
-        letterSpacing: 0,
-    },
-    customMarkerActive: {
-        borderColor: colors.primary,
-        transform: [{ scale: 1.2 }],
-        zIndex: 10,
-        shadowColor: colors.primary,
-        shadowRadius: 10,
-    },
-    markerBadge: {
-        position: 'absolute',
-        bottom: -4,
-        right: -4,
-        backgroundColor: colors.primary,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: colors.background,
-    },
-    calloutCard: {
-        width: 220,
-        borderRadius: layout.radius.m,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        backgroundColor: colors.glassSurface,
-        overflow: 'hidden',
-    },
-    calloutImage: {
-        width: '100%',
-        height: 110,
-    },
-    calloutTextRow: {
-        paddingVertical: 10,
-        paddingHorizontal: 10,
-    },
-    calloutTitle: {
-        ...typography.bodyLarge,
-        fontFamily: 'SpaceGrotesk_600SemiBold',
-        fontSize: 14,
-        lineHeight: 18,
-        color: colors.text,
-        marginBottom: 2,
-    },
-    calloutMeta: {
-        ...typography.bodySmall,
-        fontSize: 12,
-        lineHeight: 16,
-        color: colors.textMuted,
-    },
-    bottomSheet: {
-        position: 'absolute',
-        bottom: 100, // Above tab bar and sector panel loosely
-        left: layout.padding.m,
-        right: layout.padding.m,
-        zIndex: 20,
-    },
-    sheetContent: {
-        flexDirection: 'row',
-        padding: 12,
-        borderRadius: layout.radius.l,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: 'hidden',
-    },
-    sheetImage: {
-        width: 64,
-        height: 64,
-        borderRadius: layout.radius.s,
-        marginRight: 12,
-        backgroundColor: colors.surfaceHighlight,
-    },
-    sheetDetails: {
-        flex: 1,
-        marginLeft: 0,
-        justifyContent: 'center',
-    },
-    sheetTitle: {
-        ...typography.h3,
-        fontSize: 18,
-        color: colors.text,
-        marginBottom: 4,
-    },
-    sheetSubtitle: {
-        ...typography.bodySmall,
-        color: colors.textMuted,
-        lineHeight: 18,
-    },
-    sheetDistance: {
-        ...typography.caption,
-        color: colors.textSubtle,
-        marginLeft: 4,
-    },
-    sheetButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.primary,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: layout.radius.round,
-    },
-    sheetButtonText: {
-        ...typography.caption,
-        fontWeight: '800',
-        color: colors.onPrimary,
-    }
+        header: {
+            position: 'absolute',
+            left: layout.padding.l,
+            zIndex: 10,
+            backgroundColor: colors.glassSurface,
+            paddingHorizontal: 20,
+            paddingVertical: 10,
+            borderRadius: layout.radius.round,
+            borderWidth: 1,
+            borderColor: colors.glassBorder,
+            ...Shadows.soft,
+        },
+        brandText: {
+            fontFamily: 'SpaceGrotesk_700Bold',
+            fontSize: 22,
+            color: colors.accent,
+            letterSpacing: -0.5,
+        },
+        radarContainer: {
+            ...StyleSheet.absoluteFillObject,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 5,
+        },
+        ring: {
+            position: 'absolute',
+            borderWidth: 1,
+            borderColor: withAlpha(colors.accent, 0.08),
+        },
+        sweepContainer: {
+            position: 'absolute',
+            width: width * 1.2,
+            height: width * 1.2,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        sweepCone: {
+            position: 'absolute',
+            width: width * 0.6,
+            height: width * 0.6,
+            top: 0,
+            left: width * 0.6,
+            backgroundColor: colors.accent,
+            opacity: 0.05,
+            borderTopRightRadius: width * 0.6,
+        },
+        sweepLine: {
+            position: 'absolute',
+            width: 1.5,
+            height: width * 0.6,
+            backgroundColor: colors.accent,
+            top: 0,
+            left: width * 0.6,
+            ...Shadows.glow(colors.accent),
+        },
+        sectorPanel: {
+            position: 'absolute',
+            left: layout.padding.l,
+            backgroundColor: colors.surface,
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: layout.radius.l,
+            borderWidth: 1,
+            borderColor: colors.border,
+            zIndex: 10,
+            ...Shadows.medium,
+        },
+        sectorLabel: {
+            ...typography.caption,
+            color: colors.textSubtle,
+            marginBottom: 2,
+            fontSize: 10,
+        },
+        sectorName: {
+            fontFamily: 'SpaceGrotesk_700Bold',
+            fontSize: 14,
+            color: colors.primary,
+            letterSpacing: 0.8,
+        },
+        customMarker: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            borderWidth: 2,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            justifyContent: 'center',
+            alignItems: 'center',
+            ...Shadows.soft,
+        },
+        markerInitials: {
+            fontFamily: 'SpaceGrotesk_700Bold',
+            fontSize: 13,
+            color: colors.text,
+        },
+        customMarkerActive: {
+            borderColor: colors.accent,
+            transform: [{ scale: 1.15 }],
+            zIndex: 100,
+            ...Shadows.glow(colors.accent),
+        },
+        markerBadge: {
+            position: 'absolute',
+            bottom: -2,
+            right: -2,
+            backgroundColor: colors.accent,
+            width: 16,
+            height: 16,
+            borderRadius: 8,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1.5,
+            borderColor: colors.surface,
+        },
+        calloutCard: {
+            width: 200,
+            borderRadius: layout.radius.m,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            overflow: 'hidden',
+            ...Shadows.medium,
+        },
+        calloutImage: {
+            width: '100%',
+            height: 100,
+        },
+        calloutTextRow: {
+            padding: 10,
+        },
+        calloutTitle: {
+            ...typography.body,
+            fontFamily: 'SpaceGrotesk_600SemiBold',
+            color: colors.text,
+            marginBottom: 2,
+        },
+        calloutMeta: {
+            ...typography.caption,
+            fontSize: 11,
+            color: colors.textMuted,
+        },
+        bottomSheet: {
+            position: 'absolute',
+            left: layout.padding.m,
+            right: layout.padding.m,
+            zIndex: 30,
+        },
+        sheetContent: {
+            flexDirection: 'row',
+            padding: layout.padding.m,
+            borderRadius: layout.radius.xl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: 'hidden',
+        },
+        sheetImage: {
+            width: 72,
+            height: 72,
+            borderRadius: layout.radius.m,
+            marginRight: 16,
+            backgroundColor: colors.surfaceHighlight,
+        },
+        sheetDetails: {
+            flex: 1,
+            justifyContent: 'center',
+        },
+        sheetTitle: {
+            ...typography.h3,
+            color: colors.text,
+            marginBottom: 2,
+            fontSize: 18,
+        },
+        sheetSubtitle: {
+            ...typography.bodySmall,
+            color: colors.textMuted,
+            marginBottom: 8,
+        },
+        sheetDistance: {
+            ...typography.caption,
+            color: colors.textSubtle,
+            marginLeft: 4,
+        },
+        sheetButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.accent,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: layout.radius.round,
+            ...Shadows.glow(colors.accent),
+        },
+        sheetButtonText: {
+            ...typography.caption,
+            fontWeight: '800',
+            color: colors.onAccent,
+        }
     });
 }

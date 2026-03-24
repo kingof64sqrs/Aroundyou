@@ -19,6 +19,7 @@ import ProfileScreen from '../screens/main/ProfileScreen';
 import PlaceDetailScreen from '../screens/main/PlaceDetailScreen';
 
 import { useTheme } from '../constants/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Home, Map, PlusSquare, Trophy, User } from 'lucide-react-native';
 
 const Stack = createNativeStackNavigator();
@@ -75,10 +76,14 @@ const TabNavigator = () => {
                             justifyContent: 'center',
                             alignItems: 'center',
                             marginTop: isAndroid ? -22 : -28,
-                            shadowColor: colors.primary,
-                            shadowOffset: { width: 0, height: 0 },
-                            shadowOpacity: 0.35,
-                            shadowRadius: 12,
+                            ...(Platform.OS === 'web'
+                                ? { boxShadow: `0px 0px 12px ${colors.primary}` }
+                                : {
+                                    shadowColor: colors.primary,
+                                    shadowOffset: { width: 0, height: 0 },
+                                    shadowOpacity: 0.35,
+                                    shadowRadius: 12,
+                                }),
                             elevation: 6,
                         }}>
                             <PlusSquare color={colors.onPrimary} size={28} />
@@ -102,7 +107,9 @@ const TabNavigator = () => {
 
 export default function AppNavigator() {
     const { colors, mode } = useTheme();
+    const { token, me } = useAuth();
     const base = mode === 'dark' ? DarkTheme : DefaultTheme;
+    const needsOnboarding = !!token && !!me && (!me.interests?.length || me.lat == null || me.lon == null);
 
     const navigationTheme: any = {
         ...base,
@@ -126,14 +133,20 @@ export default function AppNavigator() {
     return (
         <NavigationContainer theme={navigationTheme}>
             <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-                {/* Onboarding Flow */}
-                <Stack.Screen name="Splash" component={SplashScreen} />
-                <Stack.Screen name="SignUp" component={SignUpScreen} />
-                <Stack.Screen name="Interests" component={InterestsScreen} />
-                <Stack.Screen name="Location" component={LocationScreen} />
-
-                {/* Main App Shell */}
-                <Stack.Screen name="MainTabs" component={TabNavigator} />
+                {!token ? (
+                    <>
+                        {/* Auth Flow */}
+                        <Stack.Screen name="Splash" component={SplashScreen} />
+                        <Stack.Screen name="SignUp" component={SignUpScreen} />
+                    </>
+                ) : (
+                    <>
+                        {needsOnboarding && <Stack.Screen name="Interests" component={InterestsScreen} />}
+                        {needsOnboarding && <Stack.Screen name="Location" component={LocationScreen} />}
+                        {/* Main App Shell */}
+                        <Stack.Screen name="MainTabs" component={TabNavigator} />
+                    </>
+                )}
 
                 {/* Detail Screens */}
                 <Stack.Screen

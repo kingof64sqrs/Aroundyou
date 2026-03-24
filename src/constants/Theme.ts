@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -30,6 +30,7 @@ export type ThemeColors = {
 
   // Contrast helpers
   onPrimary: string;
+  onAccent: string;
 
   // Glass UI
   glassSurface: string;
@@ -37,67 +38,69 @@ export type ThemeColors = {
 };
 
 export const DarkColors: ThemeColors = {
-  background: '#030303',
-  surface: '#121212',
-  surfaceHighlight: '#1f1f1f',
+  background: '#0B0B0F', // Deeper Obsidian
+  surface: '#16161E', // Charcoal
+  surfaceHighlight: '#1F1F2B',
 
   // Text
   text: '#FFFFFF',
-  textMuted: '#9CA3AF',
-  textSubtle: '#4B5563',
+  textMuted: '#94A3B8', // Slate 400
+  textSubtle: '#475569', // Slate 600
 
-  // Accents & Gamification phases
-  primary: '#00FF87', // Pulse Emerald Green
-  secondary: '#00C2FF', // Cyan
-  accent: '#00FF87', // Pulse Emerald Green
-  danger: '#FF3366', // Vibrant Red
-
-  // Activity specific
-  contribute: '#00FF87',
-  gamify: '#8B5CF6',
-  retain: '#EC4899',
-
-  // Utility
-  border: '#27272A',
-  overlay: 'rgba(0, 0, 0, 0.7)',
-  transparent: 'transparent',
-
-  onPrimary: '#000000',
-
-  glassSurface: 'rgba(18, 18, 18, 0.7)',
-  glassBorder: 'rgba(255, 255, 255, 0.10)',
-};
-
-export const LightColors: ThemeColors = {
-  background: '#FFFFFF',
-  surface: '#F5F6F8',
-  surfaceHighlight: '#FFFFFF',
-
-  // Text
-  text: '#0B0B0F',
-  textMuted: '#4B5563',
-  textSubtle: '#6B7280',
-
-  // Accents & Gamification phases
+  // Accents (Electric Emerald)
   primary: '#00FF87',
-  secondary: '#00C2FF',
+  secondary: '#00E0FF', // Vivid Cyan
   accent: '#00FF87',
   danger: '#FF3366',
 
   // Activity specific
   contribute: '#00FF87',
+  gamify: '#A855F7', // Purple 500
+  retain: '#EC4899', // Pink 500
+
+  // Utility
+  border: 'rgba(255, 255, 255, 0.08)',
+  overlay: 'rgba(0, 0, 0, 0.8)',
+  transparent: 'transparent',
+
+  onPrimary: '#000000',
+  onAccent: '#000000',
+
+  glassSurface: 'rgba(22, 22, 30, 0.75)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+};
+
+export const LightColors: ThemeColors = {
+  background: '#F8FAFC', // Slate 50
+  surface: '#FFFFFF',
+  surfaceHighlight: '#F1F5F9', // Slate 100
+
+  // Text
+  text: '#0F172A', // Slate 900
+  textMuted: '#64748B', // Slate 500
+  textSubtle: '#94A3B8', // Slate 400
+
+  // Accents (Sophisticated Green for Light Mode)
+  primary: '#059669', // Emerald 600 - Better contrast on white
+  secondary: '#0EA5E9', // Sky 500
+  accent: '#10B981', // Emerald 500
+  danger: '#E11D48', // Rose 600
+
+  // Activity specific
+  contribute: '#10B981',
   gamify: '#8B5CF6',
   retain: '#EC4899',
 
   // Utility
-  border: '#E5E7EB',
-  overlay: 'rgba(0, 0, 0, 0.35)',
+  border: 'rgba(0, 0, 0, 0.06)',
+  overlay: 'rgba(0, 0, 0, 0.4)',
   transparent: 'transparent',
 
-  onPrimary: '#000000',
+  onPrimary: '#FFFFFF',
+  onAccent: '#FFFFFF',
 
-  glassSurface: 'rgba(255, 255, 255, 0.75)',
-  glassBorder: 'rgba(0, 0, 0, 0.06)',
+  glassSurface: 'rgba(255, 255, 255, 0.85)',
+  glassBorder: 'rgba(0, 0, 0, 0.05)',
 };
 
 export const Colors = DarkColors;
@@ -114,13 +117,13 @@ export type TypographyScale = {
 
 export function createTypography(colors: ThemeColors): TypographyScale {
   return {
-    h1: { fontSize: 34, lineHeight: 40, fontFamily: 'SpaceGrotesk_700Bold', color: colors.text },
-    h2: { fontSize: 24, lineHeight: 32, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text },
-    h3: { fontSize: 18, lineHeight: 26, fontFamily: 'SpaceGrotesk_500Medium', color: colors.text },
-    bodyLarge: { fontSize: 17, lineHeight: 26, fontFamily: 'Inter_400Regular', color: colors.text },
-    body: { fontSize: 15, lineHeight: 24, fontFamily: 'Inter_400Regular', color: colors.text },
+    h1: { fontSize: 32, lineHeight: 40, fontFamily: 'SpaceGrotesk_700Bold', color: colors.text, letterSpacing: -0.5 },
+    h2: { fontSize: 24, lineHeight: 32, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text, letterSpacing: -0.3 },
+    h3: { fontSize: 18, lineHeight: 26, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text },
+    bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: 'Inter_500Medium', color: colors.text },
+    body: { fontSize: 14, lineHeight: 22, fontFamily: 'Inter_400Regular', color: colors.text },
     bodySmall: { fontSize: 13, lineHeight: 18, fontFamily: 'Inter_400Regular', color: colors.textMuted },
-    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'Inter_500Medium', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.6 },
+    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'Inter_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.8 },
   };
 }
 
@@ -128,17 +131,62 @@ export const Typography = createTypography(DarkColors);
 
 export const Layout = {
   padding: {
+    xs: 4,
     s: 8,
     m: 16,
     l: 24,
     xl: 32,
+    xxl: 48,
   },
   radius: {
+    xs: 4,
     s: 8,
-    m: 16,
-    l: 24,
+    m: 12,
+    l: 20,
+    xl: 32,
     round: 9999,
   },
+};
+
+export const Shadows = {
+  soft: Platform.select({
+    web: {
+      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.10)',
+    },
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+  }) as any,
+  medium: Platform.select({
+    web: {
+      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+    },
+    default: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+  }) as any,
+  glow: (color: string) => (
+    Platform.select({
+      web: {
+        boxShadow: `0px 0px 15px ${color}`,
+      },
+      default: {
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+        elevation: 8,
+      },
+    }) as any
+  ),
 };
 
 export function createGlobalStyles(colors: ThemeColors) {
@@ -167,12 +215,23 @@ export function createGlobalStyles(colors: ThemeColors) {
       borderColor: colors.glassBorder,
       overflow: 'hidden',
     },
-    shadow: {
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 10,
-      elevation: 5,
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: Layout.radius.m,
+      padding: Layout.padding.m,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...Shadows.soft,
+    },
+    input: {
+      backgroundColor: colors.surfaceHighlight,
+      borderRadius: Layout.radius.m,
+      paddingHorizontal: Layout.padding.m,
+      paddingVertical: Layout.padding.s,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+      fontFamily: 'Inter_400Regular',
     },
   });
 }
