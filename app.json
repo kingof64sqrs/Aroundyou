@@ -2,6 +2,7 @@
   "expo": {
     "name": "Aroundyou",
     "slug": "Aroundyou",
+    "scheme": "aroundyou",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,12 +13,15 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.kingof64sqrs.aroundyou",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "AroundYou needs access to your location to discover the city's pulse around you."
+        "NSLocationWhenInUseUsageDescription": "AroundYou needs access to your location to discover the city's pulse around you.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.kingof64sqrs.aroundyou",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,6 +36,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "53cd5f88-7c04-4adf-bcd0-9087eda33d57"
+      }
+    },
+    "owner": "kingof64sqrs"
   }
 }

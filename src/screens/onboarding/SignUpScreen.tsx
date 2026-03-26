@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { ArrowRight, LogIn } from 'lucide-react-native';
+import { ArrowRight, LogIn, Map } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import { API_BASE_URL } from '../../constants/Config';
 
 import { useTheme } from '../../constants/ThemeContext';
@@ -28,7 +30,41 @@ export default function SignUpScreen() {
             return;
         }
 
-        Alert.alert('Not Supported Here', 'Use web sign-in or configure a native Google OAuth client for Expo Go.');
+        setPendingGoogleAuth(true);
+        try {
+            const returnUrl = Platform.OS === 'web'
+                ? Linking.createURL('auth/callback')
+                : AuthSession.makeRedirectUri({
+                    path: 'auth/callback',
+                    useProxy: true,
+                });
+            const startUrl = `${API_BASE_URL}/auth/google/start?success_url=${encodeURIComponent(returnUrl)}`;
+            const result = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
+
+            if (result.type !== 'success' || !result.url) {
+                return;
+            }
+
+            const queryParams = Linking.parse(result.url).queryParams;
+            const oauthError = queryParams?.error;
+            const oauthErrorDescription = queryParams?.error_description;
+            if (typeof oauthError === 'string') {
+                Alert.alert('Google sign-in failed', typeof oauthErrorDescription === 'string' ? oauthErrorDescription : oauthError);
+                return;
+            }
+
+            const token = queryParams?.token;
+            if (!token || typeof token !== 'string') {
+                Alert.alert('Sign-in failed', 'No auth token was returned.');
+                return;
+            }
+
+            await auth.signInWithAccessToken(token);
+        } catch {
+            Alert.alert('Sign-in failed', 'Unable to complete Google sign-in on this device.');
+        } finally {
+            setPendingGoogleAuth(false);
+        }
     };
 
     const styles = useMemo(() => createStyles({ colors, typography, layout }), [colors, typography, layout]);
@@ -40,7 +76,7 @@ export default function SignUpScreen() {
                 <View style={styles.content}>
                     <View style={styles.header}>
                         <View style={styles.logoBadge}>
-                            <Text style={styles.logoText}>A'Y</Text>
+                            <Map color={colors.onAccent} size={32} strokeWidth={2.5} />
                         </View>
 
                         <Text style={typography.h1}>

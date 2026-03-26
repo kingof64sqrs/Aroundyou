@@ -64,9 +64,33 @@ export type UserPublic = {
   email: string;
   phone?: string | null;
   name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
   interests?: string[] | null;
   lat?: number | null;
   lon?: number | null;
+};
+
+export type XPResponse = {
+  user_id: string;
+  xp: number;
+  level: number;
+  level_name: string;
+  next_level_xp: number;
+  progress_pct: number;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  username?: string | null;
+  name?: string | null;
+  avatar_url?: string | null;
+  xp: number;
+};
+
+export type LeaderboardResponse = {
+  entries: LeaderboardEntry[];
 };
 
 export async function signInWithGoogle(idToken: string) {
@@ -80,7 +104,14 @@ export async function getMe(token: string) {
   return apiFetch<UserPublic>(`/api/v1/users/me`, { token });
 }
 
-export async function updateMe(token: string, payload: { name?: string | null; interests?: string[] | null; lat?: number | null; lon?: number | null }) {
+export async function updateMe(token: string, payload: {
+  name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+  interests?: string[] | null;
+  lat?: number | null;
+  lon?: number | null;
+}) {
   return apiFetch<UserPublic>(`/api/v1/users/me`, { method: 'PATCH', token, body: payload });
 }
 
@@ -126,6 +157,9 @@ export type FeedItem = {
   place_id?: string | null;
   caption?: string | null;
   media_url?: string | null;
+  media_urls?: string[];
+  hashtags?: string[];
+  gem_type?: string | null;
   created_at: string;
   source: string;
 };
@@ -154,6 +188,9 @@ export type PostPublic = {
   place_id?: string | null;
   caption?: string | null;
   media_url?: string | null;
+  media_urls?: string[];
+  hashtags?: string[];
+  gem_type?: string | null;
   created_at: string;
 };
 
@@ -165,6 +202,74 @@ export async function listPosts(params?: { limit?: number; place_id?: string }) 
   return apiFetch<PostPublic[]>(`/api/v1/posts/?${search.toString()}`);
 }
 
-export async function createPost(token: string, payload: { place_id?: string | null; caption?: string | null; media_url?: string | null }) {
+export async function createPost(token: string, payload: {
+  place_id?: string | null;
+  caption?: string | null;
+  media_url?: string | null;
+  media_urls?: string[];
+  hashtags: string[];
+  gem_type?: string | null;
+}) {
   return apiFetch<PostPublic>(`/api/v1/posts/`, { method: 'POST', token, body: payload });
 }
+
+// ---------------------------------------------------------------------------
+// Rewards
+// ---------------------------------------------------------------------------
+export async function getXP(token: string) {
+  return apiFetch<XPResponse>(`/api/v1/rewards/xp`, { token });
+}
+
+export async function getLeaderboard(token: string, limit = 10) {
+  return apiFetch<LeaderboardResponse>(`/api/v1/rewards/leaderboard?limit=${limit}`, { token });
+}
+
+export async function recordRewardEvent(token: string, event: 'post' | 'checkin') {
+  return apiFetch<{ user_id: string; streak_days: number }>(`/api/v1/rewards/event`, {
+    method: 'POST',
+    token,
+    body: { event },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Avatar upload
+// ---------------------------------------------------------------------------
+export async function uploadAvatar(token: string, localUri: string): Promise<string> {
+  const formData = new FormData();
+  const filename = localUri.split('/').pop() ?? 'avatar.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+  // React Native FormData can accept { uri, name, type }
+  formData.append('file', { uri: localUri, name: filename, type } as any);
+
+  const url = `${API_BASE_URL}/api/v1/upload/avatar`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) throw await parseError(res);
+  const json = await res.json();
+  // Return absolute URL
+  return `${API_BASE_URL}${json.url}`;
+}
+
+export async function uploadPostMedia(token: string, localUri: string): Promise<string> {
+  const formData = new FormData();
+  const filename = localUri.split('/').pop() ?? 'post.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+  formData.append('file', { uri: localUri, name: filename, type } as any);
+
+  const url = `${API_BASE_URL}/api/v1/upload/post-media`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) throw await parseError(res);
+  const json = await res.json();
+  return `${API_BASE_URL}${json.url}`;
+}
+

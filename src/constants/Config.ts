@@ -34,7 +34,7 @@ function inferApiBaseUrl(): string {
 
   if (Platform.OS === 'web') {
     const host = globalThis?.location?.hostname || 'localhost';
-    return `http://${host}:8000`;
+    return `http://${host}:3000`;
   }
 
   const debuggerHost = (Constants as any)?.expoConfig?.hostUri as string | undefined;
@@ -52,10 +52,10 @@ function inferApiBaseUrl(): string {
   ]);
 
   if (host) {
-    return `http://${host}:8000`;
+    return `http://${host}:3000`;
   }
 
-  return 'http://localhost:8000';
+  return 'http://localhost:3000';
 }
 
 export const API_BASE_URL = inferApiBaseUrl();

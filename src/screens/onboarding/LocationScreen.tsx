@@ -12,6 +12,15 @@ export default function LocationScreen({ navigation }: any) {
     const { token } = useAuth();
     const [busy, setBusy] = useState(false);
 
+    React.useEffect(() => {
+        (async () => {
+            const { status } = await Location.getForegroundPermissionsAsync();
+            if (status === 'granted') {
+                navigation.replace('MainTabs');
+            }
+        })();
+    }, [navigation]);
+
     const styles = React.useMemo(() => createStyles({ colors, typography, layout }), [colors, typography, layout]);
 
     const handleAllow = async () => {

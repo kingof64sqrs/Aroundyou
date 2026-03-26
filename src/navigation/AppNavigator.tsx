@@ -8,6 +8,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 // Import screens (To be implemented)
 import SplashScreen from '../screens/onboarding/SplashScreen';
 import SignUpScreen from '../screens/onboarding/SignUpScreen';
+import UsernameScreen from '../screens/onboarding/UsernameScreen';
 import InterestsScreen from '../screens/onboarding/InterestsScreen';
 import LocationScreen from '../screens/onboarding/LocationScreen';
 
@@ -109,7 +110,7 @@ export default function AppNavigator() {
     const { colors, mode } = useTheme();
     const { token, me } = useAuth();
     const base = mode === 'dark' ? DarkTheme : DefaultTheme;
-    const needsOnboarding = !!token && !!me && (!me.interests?.length || me.lat == null || me.lon == null);
+    const needsOnboarding = !!token && !!me && !me.username;
 
     const navigationTheme: any = {
         ...base,
@@ -141,6 +142,7 @@ export default function AppNavigator() {
                     </>
                 ) : (
                     <>
+                        {needsOnboarding && <Stack.Screen name="Username" component={UsernameScreen} />}
                         {needsOnboarding && <Stack.Screen name="Interests" component={InterestsScreen} />}
                         {needsOnboarding && <Stack.Screen name="Location" component={LocationScreen} />}
                         {/* Main App Shell */}

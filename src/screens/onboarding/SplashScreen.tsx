@@ -45,11 +45,11 @@ export default function SplashScreen({ navigation }: any) {
 function createStyles({ colors, typography, layout }: any) {
     return StyleSheet.create({
         title: {
-            fontFamily: 'SpaceGrotesk_700Bold',
+            fontFamily: 'BebasNeue_400Regular',
             fontSize: 72,
             textAlign: 'center',
             lineHeight: 80,
-            letterSpacing: -3,
+            letterSpacing: 1.5,
             color: colors.text,
         },
         line: {

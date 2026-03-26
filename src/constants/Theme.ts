@@ -117,13 +117,13 @@ export type TypographyScale = {
 
 export function createTypography(colors: ThemeColors): TypographyScale {
   return {
-    h1: { fontSize: 32, lineHeight: 40, fontFamily: 'SpaceGrotesk_700Bold', color: colors.text, letterSpacing: -0.5 },
-    h2: { fontSize: 24, lineHeight: 32, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text, letterSpacing: -0.3 },
-    h3: { fontSize: 18, lineHeight: 26, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text },
-    bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: 'Inter_500Medium', color: colors.text },
-    body: { fontSize: 14, lineHeight: 22, fontFamily: 'Inter_400Regular', color: colors.text },
-    bodySmall: { fontSize: 13, lineHeight: 18, fontFamily: 'Inter_400Regular', color: colors.textMuted },
-    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'Inter_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.8 },
+    h1: { fontSize: 36, lineHeight: 44, fontFamily: 'BebasNeue_400Regular', color: colors.text, letterSpacing: 1 },
+    h2: { fontSize: 26, lineHeight: 32, fontFamily: 'BebasNeue_400Regular', color: colors.text, letterSpacing: 0.5 },
+    h3: { fontSize: 18, lineHeight: 26, fontFamily: 'Outfit_600SemiBold', color: colors.text },
+    bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: 'Outfit_500Medium', color: colors.text },
+    body: { fontSize: 14, lineHeight: 22, fontFamily: 'Outfit_400Regular', color: colors.text },
+    bodySmall: { fontSize: 13, lineHeight: 18, fontFamily: 'Outfit_400Regular', color: colors.textMuted },
+    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'Outfit_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.8 },
   };
 }
 

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import { getMe, signInWithGoogle, UserPublic } from '../services/api';
 
 type AuthState = {
@@ -6,6 +7,7 @@ type AuthState = {
   me: UserPublic | null;
   isLoading: boolean;
   signInWithGoogle: (idToken: string) => Promise<void>;
+  signInWithAccessToken: (accessToken: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -20,9 +22,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const res = await signInWithGoogle(idToken);
-      setToken(res.access_token);
       const profile = await getMe(res.access_token);
+      setToken(res.access_token);
       setMe(profile);
+    } catch (error) {
+      setToken(null);
+      setMe(null);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const signInWithAccessTokenFn = useCallback(async (accessToken: string) => {
+    setIsLoading(true);
+    try {
+      const profile = await getMe(accessToken);
+      setToken(accessToken);
+      setMe(profile);
+    } catch (error) {
+      setToken(null);
+      setMe(null);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -34,16 +55,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
+    if (Platform.OS !== 'web') return;
+    const href = window?.location?.href;
+    if (!href) return;
+
+    const url = new URL(href);
     const tokenFromQuery = url.searchParams.get('token');
     if (!tokenFromQuery) return;
 
     setIsLoading(true);
-    setToken(tokenFromQuery);
     getMe(tokenFromQuery)
       .then((profile) => {
+        setToken(tokenFromQuery);
         setMe(profile);
+      })
+      .catch(() => {
+        setToken(null);
+        setMe(null);
       })
       .finally(() => {
         url.searchParams.delete('token');
@@ -58,9 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       me,
       isLoading,
       signInWithGoogle: signInWithGoogleFn,
+      signInWithAccessToken: signInWithAccessTokenFn,
       logout,
     }),
-    [token, me, isLoading, signInWithGoogleFn, logout]
+    [token, me, isLoading, signInWithGoogleFn, signInWithAccessTokenFn, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

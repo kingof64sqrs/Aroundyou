@@ -42,12 +42,11 @@ const DiscoveryCard = ({ item, navigation, onView, onLike }: { item: FeedItem, n
         }
     };
 
-    const mockComments = Math.floor(Math.random() * 10) + 2;
 
     return (
         <View style={styles.cardContainer}>
             <Image
-                source={{ uri: item.media_url || feedImage(item.id) }}
+                source={{ uri: item.media_url || item.media_urls?.[0] || feedImage(item.id) }}
                 style={styles.backgroundImage}
                 resizeMode="cover"
             />
@@ -97,9 +96,9 @@ const DiscoveryCard = ({ item, navigation, onView, onLike }: { item: FeedItem, n
                         <Text style={styles.actionText}>{likeCount}</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Comments', 'Comments section opening...')} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Comments', 'Comments coming soon!')} activeOpacity={0.7}>
                         <MessageCircle color="white" size={32} />
-                        <Text style={styles.actionText}>{mockComments}</Text>
+                        <Text style={styles.actionText}>—</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionButton} onPress={handleShare} activeOpacity={0.7}>
@@ -169,10 +168,10 @@ export default function HomeScreen({ navigation }: any) {
 
     const loadFeed = async () => {
         if (!token) return;
-        
+
         setLoading(true);
         setError(null);
-        
+
         try {
             let coords: { latitude: number; longitude: number } | null = null;
             try {
@@ -187,18 +186,18 @@ export default function HomeScreen({ navigation }: any) {
             }
 
             console.log('[HomeScreen] Fetching feed with coords:', coords);
-            
+
             // Add timeout to prevent infinite loading
             const feedPromise = getFeed(token, {
                 limit: 30,
                 lat: coords?.latitude,
                 lon: coords?.longitude,
             });
-            
+
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error('Feed request timeout after 10s')), 10000)
             );
-            
+
             const feed = await Promise.race([feedPromise, timeoutPromise]);
             console.log('[HomeScreen] Feed loaded:', feed.length, 'items');
             setItems(feed);
