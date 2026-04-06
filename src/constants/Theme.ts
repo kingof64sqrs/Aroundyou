@@ -38,36 +38,36 @@ export type ThemeColors = {
 };
 
 export const DarkColors: ThemeColors = {
-  background: '#0B0B0F', // Deeper Obsidian
-  surface: '#16161E', // Charcoal
-  surfaceHighlight: '#1F1F2B',
+  background: '#0d0e13', // Midnight
+  surface: '#121319', // surface-container-low
+  surfaceHighlight: '#1e1f26', // surface-container-high
 
   // Text
-  text: '#FFFFFF',
-  textMuted: '#94A3B8', // Slate 400
-  textSubtle: '#475569', // Slate 600
+  text: '#f7f5fd', // on-surface
+  textMuted: '#abaab1', // on-surface-variant
+  textSubtle: '#54545b', // inverse-on-surface
 
-  // Accents (Electric Emerald)
-  primary: '#00FF87',
-  secondary: '#00E0FF', // Vivid Cyan
-  accent: '#00FF87',
-  danger: '#FF3366',
+  // Accents
+  primary: '#99f7ff',
+  secondary: '#fd8b00',
+  accent: '#99f7ff',
+  danger: '#ff716c', // error
 
   // Activity specific
-  contribute: '#00FF87',
-  gamify: '#A855F7', // Purple 500
-  retain: '#EC4899', // Pink 500
+  contribute: '#99f7ff',
+  gamify: '#6bfe9c', // tertiary-container
+  retain: '#fd8b00',
 
   // Utility
-  border: 'rgba(255, 255, 255, 0.08)',
+  border: 'rgba(247, 245, 253, 0.10)', // 10% on-surface
   overlay: 'rgba(0, 0, 0, 0.8)',
   transparent: 'transparent',
 
   onPrimary: '#000000',
   onAccent: '#000000',
 
-  glassSurface: 'rgba(22, 22, 30, 0.75)',
-  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  glassSurface: 'rgba(30, 31, 38, 0.70)',
+  glassBorder: 'rgba(247, 245, 253, 0.10)',
 };
 
 export const LightColors: ThemeColors = {
@@ -117,13 +117,13 @@ export type TypographyScale = {
 
 export function createTypography(colors: ThemeColors): TypographyScale {
   return {
-    h1: { fontSize: 36, lineHeight: 44, fontFamily: 'BebasNeue_400Regular', color: colors.text, letterSpacing: 1 },
-    h2: { fontSize: 26, lineHeight: 32, fontFamily: 'BebasNeue_400Regular', color: colors.text, letterSpacing: 0.5 },
-    h3: { fontSize: 18, lineHeight: 26, fontFamily: 'Outfit_600SemiBold', color: colors.text },
-    bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: 'Outfit_500Medium', color: colors.text },
-    body: { fontSize: 14, lineHeight: 22, fontFamily: 'Outfit_400Regular', color: colors.text },
-    bodySmall: { fontSize: 13, lineHeight: 18, fontFamily: 'Outfit_400Regular', color: colors.textMuted },
-    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'Outfit_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.8 },
+    h1: { fontSize: 56, lineHeight: 64, fontFamily: 'SpaceGrotesk_700Bold', color: colors.text, letterSpacing: -1 }, // display-lg
+    h2: { fontSize: 28, lineHeight: 36, fontFamily: 'SpaceGrotesk_600SemiBold', color: colors.text, letterSpacing: 0 }, // headline-md
+    h3: { fontSize: 22, lineHeight: 30, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.text }, // title-lg
+    bodyLarge: { fontSize: 16, lineHeight: 24, fontFamily: 'PlusJakartaSans_500Medium', color: colors.text }, // body-lg
+    body: { fontSize: 14, lineHeight: 22, fontFamily: 'PlusJakartaSans_400Regular', color: colors.text }, // body-md
+    bodySmall: { fontSize: 12, lineHeight: 16, fontFamily: 'PlusJakartaSans_400Regular', color: colors.textMuted }, // label-md
+    caption: { fontSize: 12, lineHeight: 16, fontFamily: 'PlusJakartaSans_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.8 }, // label-md bold
   };
 }
 
@@ -151,38 +151,38 @@ export const Layout = {
 export const Shadows = {
   soft: Platform.select({
     web: {
-      boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.10)',
+      boxShadow: '0px 4px 20px rgba(247, 245, 253, 0.04)',
     },
     default: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
+      shadowColor: '#f7f5fd',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.04,
+      shadowRadius: 20,
       elevation: 2,
     },
   }) as any,
   medium: Platform.select({
     web: {
-      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0px 8px 40px rgba(247, 245, 253, 0.08)',
     },
     default: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
+      shadowColor: '#f7f5fd',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 40,
       elevation: 4,
     },
   }) as any,
   glow: (color: string) => (
     Platform.select({
       web: {
-        boxShadow: `0px 0px 15px ${color}`,
+        boxShadow: `0px 0px 25px ${color}80`,
       },
       default: {
         shadowColor: color,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
-        shadowRadius: 15,
+        shadowRadius: 25,
         elevation: 8,
       },
     }) as any
@@ -231,7 +231,7 @@ export function createGlobalStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       color: colors.text,
-      fontFamily: 'Inter_400Regular',
+      fontFamily: 'PlusJakartaSans_400Regular',
     },
   });
 }
@@ -256,3 +256,18 @@ export function createTheme(mode: ThemeMode): AppTheme {
     globalStyles: createGlobalStyles(colors),
   };
 }
+
+export const PRESET_AVATARS = [
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Alex&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Sarah&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Oliver&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Emma&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=David&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Sophia&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Lucas&backgroundColor=transparent',
+  'https://api.dicebear.com/9.x/avataaars/png?seed=Isabella&backgroundColor=transparent',
+];
+
+export const AVATAR_BG_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'
+];

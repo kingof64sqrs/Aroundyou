@@ -122,6 +122,7 @@ export type PlacePublic = {
   lat: number;
   lon: number;
   metadata_json?: string | null;
+  post_count?: number;
 };
 
 export async function getNearbyPlaces(params: {
@@ -129,12 +130,14 @@ export async function getNearbyPlaces(params: {
   lon: number;
   radius_meters?: number;
   limit?: number;
+  has_posts?: boolean;
 }) {
   const search = new URLSearchParams({
     lat: String(params.lat),
     lon: String(params.lon),
     radius_meters: String(params.radius_meters ?? 1500),
     limit: String(params.limit ?? 50),
+    ...(params.has_posts !== undefined ? { has_posts: String(params.has_posts) } : {}),
   });
   return apiFetch<PlacePublic[]>(`/api/v1/places/nearby?${search.toString()}`);
 }
@@ -151,6 +154,26 @@ export async function getPresence(placeId: string) {
   return apiFetch<{ place_id: string; active: number }>(`/api/v1/places/${placeId}/presence`);
 }
 
+export async function getBookmarks(token: string, limit = 50) {
+  return apiFetch<PlacePublic[]>(`/api/v1/places/bookmarked?limit=${limit}`, { token });
+}
+
+export async function addBookmark(token: string, placeId: string) {
+  return apiFetch<{ status: string }>(`/api/v1/places/${placeId}/bookmark`, { method: 'POST', token });
+}
+
+export async function removeBookmark(token: string, placeId: string) {
+  return apiFetch<{ status: string }>(`/api/v1/places/${placeId}/bookmark`, { method: 'DELETE', token });
+}
+
+export async function getVisits(token: string, limit = 50) {
+  return apiFetch<PlacePublic[]>(`/api/v1/places/visited?limit=${limit}`, { token });
+}
+
+export async function addVisit(token: string, placeId: string) {
+  return apiFetch<{ status: string }>(`/api/v1/places/${placeId}/visit`, { method: 'POST', token });
+}
+
 export type FeedItem = {
   id: string;
   user_id: string;
@@ -160,6 +183,7 @@ export type FeedItem = {
   media_urls?: string[];
   hashtags?: string[];
   gem_type?: string | null;
+  aura_points?: number;
   created_at: string;
   source: string;
 };
@@ -191,13 +215,15 @@ export type PostPublic = {
   media_urls?: string[];
   hashtags?: string[];
   gem_type?: string | null;
+  aura_points?: number;
   created_at: string;
 };
 
-export async function listPosts(params?: { limit?: number; place_id?: string }) {
+export async function listPosts(params?: { limit?: number; place_id?: string; user_id?: string }) {
   const search = new URLSearchParams({
     limit: String(params?.limit ?? 50),
     ...(params?.place_id ? { place_id: params.place_id } : {}),
+    ...(params?.user_id ? { user_id: params.user_id } : {}),
   });
   return apiFetch<PostPublic[]>(`/api/v1/posts/?${search.toString()}`);
 }

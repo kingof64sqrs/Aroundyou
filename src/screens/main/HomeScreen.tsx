@@ -1,28 +1,137 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, Image, TouchableOpacity, StatusBar, Share, Alert, Platform, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, Dimensions, Image, TouchableOpacity, Share, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useTheme } from '../../constants/ThemeContext';
-import { MapPin, Heart, MessageCircle, Share2, Navigation, Star, RefreshCw } from 'lucide-react-native';
+import { MapPin, Heart, Bookmark, Share2, Flame, CheckCircle, Navigation, Star, Users } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Location from 'expo-location';
 import { FeedItem, getFeed, recordFeedActivity } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { Shadows } from '../../constants/Theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width, height } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 85;
+const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
+
+const PLAIN_PHOTOS = [
+    'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1449247709967-d4461a6a6103?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1507608616759-54f48f0af0ee?q=80&w=1200&auto=format&fit=crop',
+];
 
 function feedImage(seed: string) {
-    const safe = encodeURIComponent(seed);
-    return `https://picsum.photos/seed/${safe}/1200/1600`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return PLAIN_PHOTOS[Math.abs(hash) % PLAIN_PHOTOS.length];
 }
 
-const DiscoveryCard = ({ item, navigation, onView, onLike }: { item: FeedItem, navigation: any, onView: (id: string) => void, onLike: (id: string) => void }) => {
-    const { colors, typography, layout, globalStyles } = useTheme();
-    const isAndroid = Platform.OS === 'android';
-    const [liked, setLiked] = useState(false);
-    const [likeCount, setLikeCount] = useState(0);
+function auraPoints(seed: string) {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // 100..9999, stable per post id
+    return 100 + (Math.abs(hash) % 9900);
+}
 
-    const styles = React.useMemo(() => createStyles({ colors, typography, layout }), [colors, typography, layout]);
+// -------------------------------------------------------------
+// Top Navigation Bar (Fixed Overlay)
+// -------------------------------------------------------------
+const TopNav = ({ me, scrollY }: any) => {
+    // Hide the title and background when scrolled past 100px
+    const headerOpacity = scrollY.interpolate({
+        inputRange: [0, 100],
+        outputRange: [1, 0],
+        extrapolate: 'clamp'
+    });
+
+    return (
+        <View style={styles.topNav} pointerEvents="box-none">
+            {/* Animated Backgound Blur */}
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]}>
+                {Platform.OS !== 'android' ? (
+                    <BlurView tint="dark" intensity={80} style={StyleSheet.absoluteFill} />
+                ) : (
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(14,14,16,0.85)' }]} />
+                )}
+            </Animated.View>
+
+            <View style={styles.topNavContent} pointerEvents="box-none">
+                {/* App Name and Icon hide smoothly */}
+                <Animated.View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, opacity: headerOpacity }}>
+                    <Flame color="#00f1fe" size={24} />
+                    <Text style={styles.topNavTitle}>AroundYou</Text>
+                </Animated.View>
+
+                <View />
+            </View>
+        </View>
+    );
+};
+
+// -------------------------------------------------------------
+// Horizontal Trending Card
+// -------------------------------------------------------------
+const TrendingCard = ({ item, navigation, onView }: any) => {
+    return (
+        <TouchableOpacity
+            style={styles.trendingCard}
+            activeOpacity={0.8}
+            onPress={() => {
+                onView(item.id);
+                navigation.navigate('PlaceDetail', { postId: item.id, placeId: item.place_id });
+            }}
+        >
+            <Image
+                source={{ uri: feedImage(item.id + 'trend') }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+            />
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]} />
+            <View style={styles.trendingContent}>
+                <View style={styles.liveBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>Live Event</Text>
+                </View>
+                <Text style={styles.trendingTitle} numberOfLines={1}>{item.caption || 'Trending Now'}</Text>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+// -------------------------------------------------------------
+// Tonight Near You Header (Rendered inside FlatList)
+// -------------------------------------------------------------
+const TonightNearYouHeader = ({ trendingItems, navigation, onView }: any) => {
+    const { colors, typography } = useTheme();
+
+    return (
+        <View style={styles.tonightHeaderContainer}>
+            <View style={styles.sectionHeader}>
+                <Text style={typography.h2}>Tonight <Text style={{ color: '#00e2ee' }}>Near You</Text></Text>
+            </View>
+            <FlatList
+                data={trendingItems}
+                keyExtractor={i => i.id + 'trend'}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}
+                renderItem={({ item }) => <TrendingCard item={item} navigation={navigation} onView={onView} />}
+            />
+            <View style={styles.headerSpacer} />
+        </View>
+    );
+};
+
+// -------------------------------------------------------------
+// Vertical Vibe Check Card (Full Page Snap)
+// -------------------------------------------------------------
+const VibeCheckCard = ({ item, navigation, onView, onLike }: any) => {
+    const { colors, typography } = useTheme();
+    const [liked, setLiked] = useState(false);
+    const [likeCount, setLikeCount] = useState(Math.floor(Math.random() * 1000) + 100);
+    const points = useMemo(() => item.aura_points ?? auraPoints(item.id), [item.aura_points, item.id]);
 
     const handleLike = () => {
         if (!liked) {
@@ -35,176 +144,112 @@ const DiscoveryCard = ({ item, navigation, onView, onLike }: { item: FeedItem, n
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `Check out ${item.caption || 'this discovery'} on AroundYou! Download the app to discover it.`,
+                message: `Check out ${item.caption || 'this discovery'} on AroundYou!`,
             });
         } catch (error) {
             console.error(error);
         }
     };
 
-
     return (
-        <View style={styles.cardContainer}>
+        <View style={styles.vibeCardContainer}>
             <Image
-                source={{ uri: item.media_url || item.media_urls?.[0] || feedImage(item.id) }}
-                style={styles.backgroundImage}
+                source={{ uri: feedImage(item.id) }}
+                style={StyleSheet.absoluteFillObject}
                 resizeMode="cover"
             />
+            {/* Simple smooth full screen gradient instead of ugly blocks (four shades) to keep it simple plain photos */}
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
 
-            {/* Gradients should stay dark to ensure text readability on any image */}
-            <View style={[styles.topGradient, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
-            <View style={[styles.bottomGradient, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
-
-            {/* Header Info */}
-            <View style={styles.header}>
-                <View style={globalStyles.row}>
-                    <View style={styles.avatarPlaceholder} />
-                    <View style={{ marginLeft: layout.padding.s }}>
-                        <Text style={styles.username}>Explorer</Text>
-                        <View style={globalStyles.row}>
-                            <MapPin color="rgba(255,255,255,0.7)" size={12} />
-                            <Text style={styles.distance}>{item.source}</Text>
-                        </View>
-                    </View>
+            {/* Aura Score (Top Right) */}
+            <View style={styles.auraScoreCard}>
+                <Text style={styles.auraScoreLabel}>AURA</Text>
+                <Text style={styles.auraScoreValue}>9.8</Text>
+                <View style={styles.auraScoreBarWrap}>
+                    <View style={styles.auraScoreBarFill} />
                 </View>
-                {item.source === 'trending' && (
-                    <View style={styles.verifiedBadge}>
-                        {(!isAndroid) && (
-                            <BlurView
-                                intensity={40}
-                                tint="dark"
-                                style={StyleSheet.absoluteFill}
-                            />
-                        )}
-                        <Star color={colors.accent} size={14} fill={colors.accent} />
-                        <Text style={styles.verifiedText}>Verified</Text>
-                    </View>
-                )}
             </View>
 
-            {/* Content Area */}
-            <View style={styles.contentArea}>
-                {/* Right Side Actions */}
-                <View style={styles.actionSidebar}>
-                    <TouchableOpacity style={styles.actionButton} onPress={handleLike} activeOpacity={0.7}>
-                        <Heart
-                            color={liked ? colors.danger : "white"}
-                            fill={liked ? colors.danger : "transparent"}
-                            size={32}
-                            strokeWidth={liked ? 0 : 2}
-                        />
-                        <Text style={styles.actionText}>{likeCount}</Text>
-                    </TouchableOpacity>
+            {/* Aura Points (Per Post) */}
+            <View style={[styles.auraPill, styles.postAuraPill]}>
+                <Flame color="#ff51fa" size={14} fill="#ff51fa" />
+                <Text style={styles.auraPillText}>{points} Aura</Text>
+            </View>
 
-                    <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Comments', 'Comments coming soon!')} activeOpacity={0.7}>
-                        <MessageCircle color="white" size={32} />
-                        <Text style={styles.actionText}>—</Text>
+            {/* Right Action Bar */}
+            <View style={styles.actionBar}>
+                <View style={styles.actionItem}>
+                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: liked ? '#00f1fe' : 'rgba(24,24,27,0.6)' }]} onPress={handleLike}>
+                        <Heart color={liked ? '#09090b' : '#fff'} fill={liked ? '#09090b' : "transparent"} size={26} />
                     </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.actionButton} onPress={handleShare} activeOpacity={0.7}>
-                        <Share2 color="white" size={32} />
-                        <Text style={styles.actionText}>Share</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.actionText}>Vibe Check</Text>
                 </View>
 
-                {/* Text details */}
-                <View style={styles.textContainer}>
-                    <Text style={styles.title} numberOfLines={1}>{item.caption || 'New discovery'}</Text>
-                    <Text style={styles.description} numberOfLines={2}>{item.caption || ''}</Text>
-
-                    <TouchableOpacity
-                        style={styles.navigateButton}
-                        onPress={() => {
-                            onView(item.id);
-                            navigation.navigate('PlaceDetail', { postId: item.id, placeId: item.place_id });
-                        }}
-                        activeOpacity={0.8}
-                    >
-                        <Navigation color={colors.onAccent} size={18} fill={colors.onAccent} />
-                        <Text style={styles.navigateText}>I'm Going</Text>
+                <View style={styles.actionItem}>
+                    <TouchableOpacity style={styles.actionBtn}>
+                        <MapPin color="#fff" size={26} />
                     </TouchableOpacity>
+                    <Text style={styles.actionText}>Drop Pin</Text>
+                </View>
+
+                <View style={styles.actionItem}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
+                        <Share2 color="#fff" size={26} />
+                    </TouchableOpacity>
+                    <Text style={styles.actionText}>Flex</Text>
+                </View>
+            </View>
+
+            {/* Bottom Info Section */}
+            <View style={styles.vibeCardBottom}>
+                <View style={styles.vibeBadgesRow}>
+                    <View style={styles.hypePill}>
+                        <Users size={12} color="#00f1fe" />
+                        <Text style={styles.hypeText}>12.5k Hype</Text>
+                    </View>
+                </View>
+
+                <Text style={styles.vibeTitle} numberOfLines={2}>{item.caption || 'Void Rave 01'}</Text>
+                <Text style={styles.vibeDesc} numberOfLines={1}>Secret Industrial Complex • Berlin</Text>
+
+                <View style={styles.verifiedCommunityBadge}>
+                    <Text style={styles.verifiedCommunityText}>Verified by 128 Main Characters</Text>
                 </View>
             </View>
         </View>
     );
 };
 
-const LoadingPlaceholder = () => {
-    const { colors } = useTheme();
-    return (
-        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-            <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={{ marginTop: 16, color: colors.textMuted }}>Loading personalized feed...</Text>
-        </View>
-    );
-};
-
-const EmptyState = ({ onRetry }: { onRetry: () => void }) => {
-    const { colors, typography, layout } = useTheme();
-    return (
-        <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
-            <Text style={[typography.h2, { color: colors.text, marginBottom: layout.padding.m }]}>No posts yet</Text>
-            <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center', marginBottom: layout.padding.xl }]}>
-                Complete your profile and select interests to see personalized content.
-            </Text>
-            <TouchableOpacity
-                style={[styles.retryButton, { backgroundColor: colors.accent }]}
-                onPress={onRetry}
-                activeOpacity={0.8}
-            >
-                <RefreshCw color={colors.onAccent} size={18} />
-                <Text style={[typography.h3, { color: colors.onAccent, marginLeft: layout.padding.s }]}>Retry</Text>
-            </TouchableOpacity>
-        </View>
-    );
-};
+// -------------------------------------------------------------
+// Home Screen Main
+// -------------------------------------------------------------
+const HEADER_HEIGHT = 380; // Height allocated for "Tonight Near You" block 
 
 export default function HomeScreen({ navigation }: any) {
     const { colors, globalStyles } = useTheme();
-    const { token } = useAuth();
+    const { token, me } = useAuth();
     const [items, setItems] = useState<FeedItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+
+    const scrollY = useRef(new Animated.Value(0)).current;
 
     const loadFeed = async () => {
         if (!token) return;
-
         setLoading(true);
-        setError(null);
-
         try {
-            let coords: { latitude: number; longitude: number } | null = null;
+            let coords = null;
             try {
                 const perm = await Location.getForegroundPermissionsAsync();
                 if (perm.status === 'granted') {
                     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                     coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
                 }
-            } catch {
-                // ignore location errors
-                console.log('[HomeScreen] Location permission not granted');
-            }
+            } catch (e) { }
 
-            console.log('[HomeScreen] Fetching feed with coords:', coords);
-
-            // Add timeout to prevent infinite loading
-            const feedPromise = getFeed(token, {
-                limit: 30,
-                lat: coords?.latitude,
-                lon: coords?.longitude,
-            });
-
-            const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Feed request timeout after 10s')), 10000)
-            );
-
-            const feed = await Promise.race([feedPromise, timeoutPromise]);
-            console.log('[HomeScreen] Feed loaded:', feed.length, 'items');
+            const feed = await getFeed(token, { limit: 30, lat: coords?.latitude, lon: coords?.longitude });
             setItems(feed);
         } catch (err: any) {
             console.error('[HomeScreen] Feed error:', err);
-            setError(err?.message || 'Failed to load feed');
-            setItems([]);
         } finally {
             setLoading(false);
         }
@@ -214,216 +259,240 @@ export default function HomeScreen({ navigation }: any) {
         loadFeed();
     }, [token]);
 
-    const onView = useMemo(
-        () => (postId: string) => {
-            if (!token) return;
-            recordFeedActivity(token, postId, 'view').catch(() => { });
-        },
-        [token]
-    );
-
-    const onLike = useMemo(
-        () => (postId: string) => {
-            if (!token) return;
-            recordFeedActivity(token, postId, 'like').catch(() => { });
-        },
-        [token]
-    );
+    const onView = (postId: string) => { if (token) recordFeedActivity(token, postId, 'view').catch(() => { }); };
+    const onLike = (postId: string) => { if (token) recordFeedActivity(token, postId, 'like').catch(() => { }); };
 
     if (loading) {
-        return <LoadingPlaceholder />;
+        return (
+            <View style={[globalStyles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#00f1fe" />
+            </View>
+        );
     }
 
-    if (items.length === 0) {
-        return <EmptyState onRetry={loadFeed} />;
-    }
+    const trendingItems = items.slice(0, 5);
+    const feedItems = items.slice(5);
+
+    // Compute explicit snap offsets: 0, HEADER_HEIGHT, HEADER_HEIGHT+WINDOW_HEIGHT, etc.
+    const offsets = [
+        0,
+        HEADER_HEIGHT,
+        ...feedItems.map((_, i) => HEADER_HEIGHT + windowHeight * (i + 1))
+    ];
 
     return (
-        <View style={globalStyles.container}>
-            <FlatList
-                data={items}
-                renderItem={({ item }) => <DiscoveryCard item={item} navigation={navigation} onView={onView} onLike={onLike} />}
-                keyExtractor={item => item.id}
-                pagingEnabled
+        <View style={styles.rootContainer}>
+            <TopNav me={me} scrollY={scrollY} />
+
+            <Animated.FlatList
+                data={feedItems}
+                keyExtractor={(item: any) => item.id}
                 showsVerticalScrollIndicator={false}
-                snapToInterval={height}
-                snapToAlignment="start"
                 decelerationRate="fast"
+                snapToOffsets={offsets}
+                snapToAlignment="start"
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: true }
+                )}
+                scrollEventThrottle={16}
+                ListHeaderComponent={
+                    <TonightNearYouHeader
+                        trendingItems={trendingItems}
+                        navigation={navigation}
+                        onView={onView}
+                    />
+                }
+                renderItem={({ item }) => (
+                    <VibeCheckCard
+                        item={item}
+                        navigation={navigation}
+                        onView={onView}
+                        onLike={onLike}
+                    />
+                )}
             />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    loadingContainer: {
+    rootContainer: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        width,
-        height,
+        backgroundColor: '#0e0e10',
     },
-    emptyContainer: {
-        flex: 1,
+    topNav: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0,
+        height: 100,
+        paddingTop: Platform.OS === 'ios' ? 40 : 20,
+        zIndex: 50,
         justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        width,
-        height,
     },
-    retryButton: {
+    topNavContent: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 20,
     },
+    topNavTitle: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 24,
+        color: '#00f1fe',
+        letterSpacing: -1,
+        textTransform: 'uppercase',
+        textShadowColor: 'rgba(0,242,255,0.8)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 8,
+    },
+    auraPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: '#19191c',
+        paddingHorizontal: 12, paddingVertical: 6,
+        borderRadius: 99,
+        borderWidth: 1, borderColor: 'rgba(72,71,74,0.2)',
+    },
+    auraPillText: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 12, color: '#fffbfe',
+        textTransform: 'uppercase', letterSpacing: -0.5,
+    },
+    postAuraPill: {
+        position: 'absolute',
+        top: 130,
+        left: 24,
+        zIndex: 20,
+    },
+    tonightHeaderContainer: {
+        height: HEADER_HEIGHT,
+        paddingTop: 110,
+        backgroundColor: '#0e0e10',
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        paddingHorizontal: 24,
+        marginBottom: 16,
+    },
+    sectionLabel: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 10,
+        color: '#abaab1',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+    },
+    trendingCard: {
+        width: 280,
+        height: 176,
+        borderRadius: 16,
+        backgroundColor: '#1e1f26',
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    trendingContent: {
+        position: 'absolute',
+        bottom: 16, left: 16, right: 16,
+    },
+    liveBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6,
+    },
+    liveDot: {
+        width: 8, height: 8, borderRadius: 4, backgroundColor: '#fd8b00',
+    },
+    liveText: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 10, color: '#fd8b00', textTransform: 'uppercase', letterSpacing: -0.5,
+    },
+    trendingTitle: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 18, color: '#ffffff',
+    },
+    headerSpacer: {
+        flex: 1, // Fills remaining height from 380
+    },
+    // Vibe Check Vertical Cards
+    vibeCardContainer: {
+        width: windowWidth,
+        height: windowHeight,
+        position: 'relative',
+        backgroundColor: '#000',
+    },
+    auraScoreCard: {
+        position: 'absolute',
+        top: 130, right: 24, zIndex: 10,
+        backgroundColor: 'rgba(9,9,11,0.8)',
+        borderTopWidth: 2, borderTopColor: '#00f1fe',
+        padding: 16,
+        alignItems: 'center',
+        shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 15,
+    },
+    auraScoreLabel: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 10, textTransform: 'uppercase', color: '#00f1fe', letterSpacing: 2, marginBottom: 4,
+    },
+    auraScoreValue: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 36, color: '#fff',
+    },
+    auraScoreBarWrap: {
+        width: '100%', height: 4, backgroundColor: '#27272a', marginTop: 8,
+    },
+    auraScoreBarFill: {
+        position: 'absolute', top: 0, left: 0, bottom: 0, width: '98%',
+        backgroundColor: '#00f1fe',
+        shadowColor: '#00f1fe', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10,
+    },
+    actionBar: {
+        position: 'absolute',
+        right: 24, bottom: 140,
+        alignItems: 'center', gap: 32, zIndex: 20,
+    },
+    actionItem: {
+        alignItems: 'center', gap: 8,
+    },
+    actionBtn: {
+        width: 56, height: 56, borderRadius: 28,
+        backgroundColor: 'rgba(24,24,27,0.6)',
+        borderWidth: 1, borderColor: 'rgba(113,113,122,0.5)',
+        alignItems: 'center', justifyContent: 'center',
+    },
+    actionText: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 10, color: '#fff',
+    },
+    vibeCardBottom: {
+        position: 'absolute',
+        bottom: 120, left: 24, right: 80, zIndex: 10,
+    },
+    vibeBadgesRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16,
+    },
+    hypePill: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: 'rgba(24,24,27,0.4)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 99,
+    },
+    hypeText: {
+        fontFamily: 'PlusJakartaSans_700Bold',
+        fontSize: 10, color: 'rgba(255,255,255,0.8)',
+    },
+    vibeTitle: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 40, color: '#fff', letterSpacing: -1, marginBottom: 4,
+    },
+    vibeDesc: {
+        fontFamily: 'PlusJakartaSans_500Medium',
+        fontSize: 14, color: '#a1a1aa', maxWidth: 250, marginBottom: 16,
+    },
+    verifiedCommunityBadge: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99, alignSelf: 'flex-start',
+    },
+    verifiedCommunityText: {
+        fontFamily: 'SpaceGrotesk_700Bold',
+        fontSize: 10, color: '#ff51fa', textTransform: 'uppercase', letterSpacing: 0.5,
+    }
 });
-
-function createStyles({
-    colors,
-    typography,
-    layout,
-}: {
-    colors: any;
-    typography: any;
-    layout: any;
-}) {
-    const shadowStyle = {
-        textShadowColor: 'rgba(0,0,0,0.6)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
-    };
-
-    return StyleSheet.create({
-        cardContainer: {
-            width,
-            height: height,
-            position: 'relative',
-            backgroundColor: colors.background,
-        },
-        backgroundImage: {
-            ...StyleSheet.absoluteFillObject,
-        },
-        topGradient: {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 180,
-        },
-        bottomGradient: {
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 450,
-        },
-        header: {
-            position: 'absolute',
-            top: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 60,
-            left: layout.padding.m,
-            right: layout.padding.m,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            zIndex: 10,
-        },
-        avatarPlaceholder: {
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: colors.accent,
-            borderWidth: 2,
-            borderColor: 'rgba(255,255,255,0.3)',
-        },
-        username: {
-            ...typography.bodyLarge,
-            fontWeight: '700',
-            color: 'white',
-            ...shadowStyle,
-        },
-        distance: {
-            ...typography.caption,
-            color: 'rgba(255,255,255,0.8)',
-            marginLeft: 4,
-            ...shadowStyle,
-        },
-        verifiedBadge: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: layout.radius.round,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            backgroundColor: Platform.OS === 'android' ? 'rgba(0,0,0,0.4)' : 'transparent',
-        },
-        verifiedText: {
-            ...typography.caption,
-            fontWeight: '800',
-            color: colors.accent,
-            marginLeft: 6,
-        },
-        contentArea: {
-            position: 'absolute',
-            bottom: TAB_BAR_HEIGHT + 30,
-            left: 0,
-            right: 0,
-            paddingHorizontal: layout.padding.m,
-            flexDirection: 'row-reverse',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-        },
-        actionSidebar: {
-            alignItems: 'center',
-            gap: 24,
-            marginBottom: 10,
-        },
-        actionButton: {
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        actionText: {
-            ...typography.caption,
-            color: 'white',
-            marginTop: 6,
-            fontWeight: '700',
-            ...shadowStyle,
-        },
-        textContainer: {
-            flex: 1,
-            paddingRight: layout.padding.l,
-        },
-        title: {
-            ...typography.h1,
-            color: 'white',
-            marginBottom: 8,
-            ...shadowStyle,
-            textShadowRadius: 8,
-        },
-        description: {
-            ...typography.body,
-            color: 'rgba(255,255,255,0.9)',
-            marginBottom: 20,
-            lineHeight: 22,
-            ...shadowStyle,
-        },
-        navigateButton: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: colors.accent,
-            alignSelf: 'flex-start',
-            paddingHorizontal: 24,
-            paddingVertical: 14,
-            borderRadius: layout.radius.round,
-            ...Shadows.glow(colors.accent),
-        },
-        navigateText: {
-            ...typography.h3,
-            fontWeight: '800',
-            color: colors.onAccent,
-            marginLeft: 10,
-        }
-    });
-}

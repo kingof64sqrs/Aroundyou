@@ -8,24 +8,10 @@ import { Camera, User as UserIcon, ArrowRight, AtSign, Sparkles } from 'lucide-r
 
 import { useTheme } from '../../constants/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Shadows } from '../../constants/Theme';
+import { Shadows, PRESET_AVATARS, AVATAR_BG_COLORS } from '../../constants/Theme';
 import { updateMe, uploadAvatar } from '../../services/api';
 
-// 8 preset avatar options using placeholder images
-const PRESET_AVATARS = [
-    'https://i.pravatar.cc/150?img=11',
-    'https://i.pravatar.cc/150?img=32',
-    'https://i.pravatar.cc/150?img=33',
-    'https://i.pravatar.cc/150?img=44',
-    'https://i.pravatar.cc/150?img=55',
-    'https://i.pravatar.cc/150?img=60',
-    'https://i.pravatar.cc/150?img=68',
-    'https://i.pravatar.cc/150?img=69',
-];
-const AVATAR_BG_COLORS = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-    '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-];
+// Presets removed inline, loaded from Theme.ts
 
 export default function UsernameScreen({ navigation }: any) {
     const { colors, typography, layout, globalStyles, mode } = useTheme();
@@ -112,9 +98,21 @@ export default function UsernameScreen({ navigation }: any) {
 
                         {/* Custom photo button */}
                         <View style={{ alignSelf: 'center', marginBottom: layout.padding.l, position: 'relative' }}>
-                            <TouchableOpacity style={styles.photoUploadBtn} onPress={handlePickPhoto} activeOpacity={0.8}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.photoUploadBtn,
+                                    selectedPreset !== null && !customAvatarUri ? styles.photoUploadBtnPreset : null
+                                ]}
+                                onPress={handlePickPhoto}
+                                activeOpacity={0.8}
+                            >
                                 {customAvatarUri ? (
                                     <Image source={{ uri: customAvatarUri }} style={styles.customAvatarImg} />
+                                ) : selectedPreset !== null ? (
+                                    <>
+                                        <View style={[styles.presetBgBig, { backgroundColor: AVATAR_BG_COLORS[selectedPreset] + '60' }]} />
+                                        <Image source={{ uri: PRESET_AVATARS[selectedPreset] }} style={styles.presetImgBig} />
+                                    </>
                                 ) : (
                                     <>
                                         <Camera color={colors.accent} size={32} />
@@ -145,8 +143,7 @@ export default function UsernameScreen({ navigation }: any) {
                                         key={idx}
                                         style={[
                                             styles.presetItem,
-                                            { backgroundColor: AVATAR_BG_COLORS[idx] + '33' },
-                                            isSelected && { borderColor: colors.accent, borderWidth: 2, ...Shadows.glow(colors.accent) },
+                                            isSelected && { ...Shadows.glow(colors.accent) },
                                         ]}
                                         onPress={() => {
                                             setSelectedPreset(idx);
@@ -154,7 +151,12 @@ export default function UsernameScreen({ navigation }: any) {
                                         }}
                                         activeOpacity={0.7}
                                     >
-                                        <Image source={{ uri: url }} style={{ width: 60, height: 60, borderRadius: 18 }} />
+                                        <View style={[
+                                            styles.presetBg,
+                                            { backgroundColor: AVATAR_BG_COLORS[idx] + '40' },
+                                            isSelected && { borderColor: colors.accent, borderWidth: 2 }
+                                        ]} />
+                                        <Image source={{ uri: url }} style={styles.presetImg} />
                                         {isSelected && (
                                             <View style={[styles.presetCheck, { backgroundColor: colors.accent }]}>
                                                 <Text style={{ color: colors.onAccent, fontSize: 10, fontWeight: '800' }}>✓</Text>
@@ -262,13 +264,31 @@ function createStyles({ colors, typography, layout, mode }: any) {
             borderStyle: 'dashed',
             justifyContent: 'center',
             alignItems: 'center',
-            overflow: 'hidden',
+        },
+        photoUploadBtnPreset: {
+            borderWidth: 0,
+            backgroundColor: 'transparent',
+            justifyContent: 'flex-end',
+        },
+        presetBgBig: {
+            position: 'absolute',
+            bottom: 0,
+            width: 120,
+            height: 120,
+            borderRadius: 60,
+        },
+        presetImgBig: {
+            width: 140,
+            height: 140,
+            marginBottom: 10,
+            resizeMode: 'contain',
         },
         customAvatarImg: {
             width: 120,
             height: 120,
             borderRadius: 60,
             resizeMode: 'cover',
+            overflow: 'hidden',
         },
         photoEditBadge: {
             position: 'absolute',
@@ -310,17 +330,26 @@ function createStyles({ colors, typography, layout, mode }: any) {
             justifyContent: 'center',
         },
         presetItem: {
-            width: 64,
-            height: 64,
-            borderRadius: 20,
-            justifyContent: 'center',
+            width: 66,
+            height: 70,
+            justifyContent: 'flex-end',
             alignItems: 'center',
-            borderWidth: 1.5,
-            borderColor: colors.border,
             position: 'relative',
         },
-        presetEmoji: {
-            display: 'none',
+        presetBg: {
+            position: 'absolute',
+            bottom: 0,
+            width: 60,
+            height: 50,
+            borderRadius: 30,
+            borderWidth: 1.5,
+            borderColor: colors.border,
+        },
+        presetImg: {
+            width: 72,
+            height: 72,
+            marginBottom: 4,
+            resizeMode: 'contain',
         },
         presetCheck: {
             position: 'absolute',

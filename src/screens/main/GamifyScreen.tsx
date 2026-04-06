@@ -1,27 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Platform, ActivityIndicator, Image } from 'react-native';
 import { useTheme } from '../../constants/ThemeContext';
 import { Flame, Trophy, Award, Crown, MapIcon, Compass, Star, ChevronRight, AlertCircle } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
-import { Shadows } from '../../constants/Theme';
+import { Shadows, PRESET_AVATARS, AVATAR_BG_COLORS } from '../../constants/Theme';
 import { useAuth } from '../../context/AuthContext';
 import { getXP, getLeaderboard, XPResponse, LeaderboardEntry } from '../../services/api';
 
 const { width } = Dimensions.get('window');
 
-// Preset avatar emoji map (matches backend "preset:N" format)
-const PRESET_EMOJIS = ['🦊', '🐼', '🦋', '🐉', '🌙', '⚡', '🔥', '🌊'];
-const PRESET_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
-
 function AvatarMini({ avatarUrl, name, size = 36 }: { avatarUrl?: string | null; name?: string | null; size?: number }) {
     const { colors } = useTheme();
+
+    if (avatarUrl && !avatarUrl.startsWith('preset:')) {
+        const fullUrl = avatarUrl.startsWith('http') ? avatarUrl : `${require('../../constants/Config').API_BASE_URL}${avatarUrl}`;
+        return (
+            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.surfaceHighlight, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
+                <Image source={{ uri: fullUrl }} style={{ width: size, height: size }} resizeMode="cover" />
+            </View>
+        );
+    }
+
     if (avatarUrl?.startsWith('preset:')) {
         const idx = parseInt(avatarUrl.split(':')[1], 10);
-        const emoji = PRESET_EMOJIS[idx] ?? '🦊';
-        const bg = PRESET_COLORS[idx] ?? colors.surfaceHighlight;
+        const url = PRESET_AVATARS[idx] ?? PRESET_AVATARS[0];
+        const bg = AVATAR_BG_COLORS[idx] ?? colors.surfaceHighlight;
         return (
-            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg + '55', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ fontSize: size * 0.48 }}>{emoji}</Text>
+            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg + '55', justifyContent: 'flex-end', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                <Image source={{ uri: url }} style={{ width: size * 1.1, height: size * 1.1, marginBottom: -size * 0.05 }} resizeMode="contain" />
             </View>
         );
     }

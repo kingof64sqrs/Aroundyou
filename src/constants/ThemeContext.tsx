@@ -12,7 +12,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const initialMode: ThemeMode = systemScheme === 'light' ? 'light' : 'dark';
+  const initialMode: ThemeMode = 'dark'; // Force dark mode for Neon Flaneur theme
   const [mode, setMode] = useState<ThemeMode>(initialMode);
 
   const value = useMemo<ThemeContextValue>(() => {

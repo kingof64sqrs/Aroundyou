@@ -3,7 +3,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, TouchableOpacity, Text, Dimensions } from 'react-native';
 
 // Import screens (To be implemented)
 import SplashScreen from '../screens/onboarding/SplashScreen';
@@ -16,99 +16,132 @@ import HomeScreen from '../screens/main/HomeScreen';
 import MapScreen from '../screens/main/MapScreen';
 import PostScreen from '../screens/main/PostScreen';
 import GamifyScreen from '../screens/main/GamifyScreen';
+import ExploreScreen from '../screens/main/ExploreScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import PlaceDetailScreen from '../screens/main/PlaceDetailScreen';
+import UserActivityScreen from '../screens/main/UserActivityScreen';
 
 import { useTheme } from '../constants/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { Home, Map, PlusSquare, Trophy, User } from 'lucide-react-native';
+import { Compass, Map as MapIcon, PlusSquare, BarChart3, User, Search } from 'lucide-react-native';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const TabNavigator = () => {
+const { width: windowWidth } = Dimensions.get('window');
+const pillWidth = Math.min(windowWidth * 0.9, 400);
+
+const CustomTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
     const { colors, mode } = useTheme();
-    const isAndroid = Platform.OS === 'android';
+
     return (
-        <Tab.Navigator
-            screenOptions={{
-                headerShown: false,
-                tabBarStyle: {
-                    elevation: 0,
-                    backgroundColor: colors.glassSurface,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.glassBorder,
-                    height: isAndroid ? 64 : 72,
-                    paddingTop: isAndroid ? 8 : 10,
-                    paddingBottom: isAndroid ? 8 : 10,
-                },
-                tabBarBackground: () =>
-                    isAndroid ? (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassSurface }]} />
-                    ) : (
-                        <BlurView tint={mode === 'dark' ? 'dark' : 'light'} intensity={35} style={StyleSheet.absoluteFill} />
-                    ),
-                tabBarActiveTintColor: colors.primary,
-                tabBarInactiveTintColor: colors.textMuted,
-                tabBarShowLabel: false,
-                tabBarHideOnKeyboard: true,
-            }}
-        >
-            <Tab.Screen
-                name="HomeTab"
-                component={HomeScreen}
-                options={{ tabBarIcon: ({ color, size }) => <Home color={color} size={28} /> }}
-            />
-            <Tab.Screen
-                name="MapTab"
-                component={MapScreen}
-                options={{ tabBarIcon: ({ color, size }) => <Map color={color} size={28} /> }}
-            />
-            <Tab.Screen
-                name="PostTab"
-                component={PostScreen}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <View style={{
-                            backgroundColor: colors.primary,
-                            width: 56,
-                            height: 56,
-                            borderRadius: 28,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginTop: isAndroid ? -22 : -28,
-                            ...(Platform.OS === 'web'
-                                ? { boxShadow: `0px 0px 12px ${colors.primary}` }
-                                : {
-                                    shadowColor: colors.primary,
-                                    shadowOffset: { width: 0, height: 0 },
-                                    shadowOpacity: 0.35,
-                                    shadowRadius: 12,
-                                }),
-                            elevation: 6,
-                        }}>
-                            <PlusSquare color={colors.onPrimary} size={28} />
-                        </View>
-                    )
-                }}
-            />
-            <Tab.Screen
-                name="GamifyTab"
-                component={GamifyScreen}
-                options={{ tabBarIcon: ({ color, size }) => <Trophy color={color} size={28} /> }}
-            />
-            <Tab.Screen
-                name="ProfileTab"
-                component={ProfileScreen}
-                options={{ tabBarIcon: ({ color, size }) => <User color={color} size={28} /> }}
-            />
+        <View style={navStyles.tabContainer}>
+            {Platform.OS !== 'android' ? (
+                <BlurView tint="dark" intensity={80} style={StyleSheet.absoluteFill} />
+            ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(24, 24, 27, 0.9)' }]} />
+            )}
+
+            <View style={navStyles.tabContent}>
+                {state.routes.map((route, index) => {
+                    const isFocused = state.index === index;
+
+                    const onPress = () => {
+                        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                        if (!isFocused && !event.defaultPrevented) {
+                            navigation.navigate(route.name);
+                        }
+                    };
+
+                    let icon = null;
+                    if (route.name === 'HomeTab') {
+                        icon = <Compass size={24} color={isFocused ? '#09090b' : '#a1a1aa'} />;
+                    } else if (route.name === 'MapTab') {
+                        icon = <MapIcon size={24} color={isFocused ? '#09090b' : '#a1a1aa'} />;
+                    } else if (route.name === 'PostTab') {
+                        icon = <PlusSquare size={24} color={isFocused ? '#09090b' : '#a1a1aa'} />;
+                    } else if (route.name === 'ExploreTab') {
+                        icon = <Search size={24} color={isFocused ? '#09090b' : '#a1a1aa'} />;
+                    } else if (route.name === 'ProfileTab') {
+                        icon = <User size={24} color={isFocused ? '#09090b' : '#a1a1aa'} />;
+                    }
+
+                    return (
+                        <TouchableOpacity
+                            key={index}
+                            onPress={onPress}
+                            activeOpacity={0.7}
+                            style={[
+                                navStyles.tabButton,
+                                isFocused && navStyles.activeTabButton
+                            ]}
+                        >
+                            {icon}
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+};
+
+const navStyles = StyleSheet.create({
+    tabContainer: {
+        position: 'absolute',
+        bottom: 24,
+        left: (windowWidth - pillWidth) / 2,
+        width: pillWidth,
+        borderRadius: 99,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(24, 24, 27, 0.6)',
+        shadowColor: '#00f1fe',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 32,
+        elevation: 10,
+    },
+    tabContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        height: 64,
+        paddingHorizontal: 8,
+    },
+    tabButton: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    activeTabButton: {
+        backgroundColor: '#00f1fe',
+        shadowColor: '#00f1fe',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 15,
+        elevation: 10,
+    }
+});
+
+const TabNavigator = () => {
+    return (
+        <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+            <Tab.Screen name="HomeTab" component={HomeScreen} />
+            <Tab.Screen name="MapTab" component={MapScreen} />
+            <Tab.Screen name="PostTab" component={PostScreen} />
+            <Tab.Screen name="ExploreTab" component={ExploreScreen} />
+            <Tab.Screen name="ProfileTab" component={ProfileScreen} />
         </Tab.Navigator>
     );
 };
 
 export default function AppNavigator() {
     const { colors, mode } = useTheme();
-    const { token, me } = useAuth();
+    const { token, me, isLoading } = useAuth();
     const base = mode === 'dark' ? DarkTheme : DefaultTheme;
     const needsOnboarding = !!token && !!me && !me.username;
 
@@ -134,10 +167,14 @@ export default function AppNavigator() {
     return (
         <NavigationContainer theme={navigationTheme}>
             <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-                {!token ? (
+                {isLoading ? (
                     <>
-                        {/* Auth Flow */}
+                        {/* Show splash while loading auth state */}
                         <Stack.Screen name="Splash" component={SplashScreen} />
+                    </>
+                ) : !token ? (
+                    <>
+                        {/* Auth Flow - user not logged in */}
                         <Stack.Screen name="SignUp" component={SignUpScreen} />
                     </>
                 ) : (
@@ -155,6 +192,11 @@ export default function AppNavigator() {
                     name="PlaceDetail"
                     component={PlaceDetailScreen}
                     options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+                />
+                <Stack.Screen
+                    name="UserActivity"
+                    component={UserActivityScreen}
+                    options={{ animation: 'slide_from_right' }}
                 />
             </Stack.Navigator>
         </NavigationContainer>

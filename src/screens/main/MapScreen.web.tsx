@@ -55,8 +55,8 @@ export default function MapScreenWeb({ navigation }: any) {
       const nearby = await getNearbyPlaces({
         lat: center.latitude,
         lon: center.longitude,
-        radius_meters: 7000,
-        limit: 50,
+        radius_meters: 2000,
+        limit: 20,
       });
 
       const rows = nearby

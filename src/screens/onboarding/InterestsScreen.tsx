@@ -8,8 +8,8 @@ import { updateMe } from '../../services/api';
 
 const ALL_INTERESTS = [
     'Cafes', 'Street food', 'Study spots', 'Nightlife',
-    'Cheap eats', 'Hidden gems', 'Events', 'Live Music',
-    'Desserts', 'Rooftops', 'Parks', 'Thrifting'
+    'Affordable eats', 'Hidden gems', 'Events', 'Live Music',
+    'Desserts', 'Rooftops', 'Parks', 'Thrifting' , 'Fashion'
 ];
 
 export default function InterestsScreen({ navigation }: any) {
@@ -28,7 +28,7 @@ export default function InterestsScreen({ navigation }: any) {
 
     const handleContinue = async () => {
         if (selected.length < 2 || !token) return;
-        
+
         setLoading(true);
         try {
             await updateMe(token, { interests: selected });
@@ -114,7 +114,6 @@ function createStyles({
     mode: any;
 }) {
     const tagBg = mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)';
-    const selectedBg = mode === 'dark' ? 'rgba(0, 255, 135, 0.12)' : 'rgba(16, 185, 129, 0.08)';
 
     return StyleSheet.create({
         header: {
@@ -140,10 +139,10 @@ function createStyles({
             borderColor: colors.border,
         },
         tagSelected: {
-            backgroundColor: selectedBg,
+            backgroundColor: colors.accent,
             borderColor: colors.accent,
             ...Shadows.glow(colors.accent),
-            shadowOpacity: 0.2, // Toned down for chips
+            shadowOpacity: 0.3,
         },
         tagText: {
             ...typography.body,
@@ -151,8 +150,8 @@ function createStyles({
             fontWeight: '500',
         },
         tagTextSelected: {
-            color: colors.accent,
-            fontWeight: '700',
+            color: colors.onAccent,
+            fontWeight: '800',
         },
         footer: {
             padding: layout.padding.xl,
